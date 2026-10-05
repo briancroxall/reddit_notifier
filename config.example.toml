@@ -1,0 +1,21 @@
+# Copy this file to config.toml and edit it:
+#   cp config.example.toml config.toml
+# config.toml is gitignored, so your ntfy topic stays private.
+
+# Subreddit to watch (no "r/").
+subreddit = "fragranceswap"
+
+# Minutes between polls. Minimum 2; 5 is polite and fast enough.
+poll_interval_minutes = 5
+
+# Reddit asks for a descriptive User-Agent that identifies you.
+user_agent = "python:reddit-notifier:v0.1 (by /u/parkaboy7)"
+
+# Where the SQLite database lives (relative to where you run the command).
+db_path = "data/notifier.db"
+
+[ntfy]
+server = "https://ntfy.sh"
+# Anyone who knows the topic name can read it, so make it hard to guess,
+# e.g. "fragswap-" followed by random letters and digits.
+topic = "CHANGE-ME"

@@ -1,0 +1,9 @@
+# Python / uv
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Local settings and data (never commit)
+config.toml
+data/
