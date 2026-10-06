@@ -9,6 +9,11 @@ Matching happens in two passes:
 2. Fuzzy (if the item allows it): compare runs of words against each term,
    ignoring spaces and allowing a small number of typos. Catches "Virdie"
    (swapped letters) and "Vi ride" (split word) without listing them.
+
+Before either pass, an item's exclude phrases are blanked out of the text.
+With "Aventus" excluding "Aventus Cologne", a post mentioning only Aventus
+Cologne won't match, but one listing both "Creed Aventus" and "Aventus
+Cologne" still will.
 """
 
 import html
@@ -24,11 +29,16 @@ FUZZY_TWO_TYPOS_LENGTH = 10
 
 SALE_TAG = re.compile(r"\[[^\]]*\bwts\b[^\]]*\]", re.IGNORECASE)
 
+# Replaces excluded phrases. It can't appear in normalized text (which is
+# only a-z, 0-9 and spaces), so nothing can ever match it.
+EXCLUDED = "_"
+
 
 @dataclass
 class WatchItem:
     name: str
     variants: list[str] = field(default_factory=list)
+    excludes: list[str] = field(default_factory=list)
     sale_only: bool = False
     fuzzy: bool = True
     notes: str = ""
@@ -118,11 +128,24 @@ def find_fuzzy(term: str, text: str) -> str | None:
     return None
 
 
+def remove_excluded(text: str, excludes: list[str]) -> str:
+    """Blank out whole-word occurrences of each exclude phrase.
+    Longest first, so "aventus cologne absolu" wins over "aventus cologne"."""
+    phrases = sorted(filter(None, map(normalize, excludes)), key=len, reverse=True)
+    for phrase in phrases:
+        # (?<!\S) and (?!\S): the phrase is bounded by spaces or the text's ends.
+        text = re.sub(rf"(?<!\S){re.escape(phrase)}(?!\S)", EXCLUDED, text)
+    return text
+
+
 def match_item(item: WatchItem, title: str, body: str) -> Match | None:
     """Best match for one watch item: exact beats fuzzy, title beats body."""
     if item.sale_only and not is_sale_post(title):
         return None
-    fields = [("title", normalize(title)), ("body", normalize(body))]
+    fields = [
+        (where, remove_excluded(normalize(text), item.excludes))
+        for where, text in [("title", title), ("body", body)]
+    ]
     terms = [(t, normalize(t)) for t in item.terms]
 
     for where, text in fields:

@@ -13,13 +13,21 @@ def conn(tmp_path):
 
 
 def test_watch_items_round_trip(conn):
-    item = WatchItem("Virēre", variants=["Virere", "Vi rere"], sale_only=True, fuzzy=False, notes="50ml ok")
+    item = WatchItem(
+        "Virēre",
+        variants=["Virere", "Vi rere"],
+        excludes=["Virēre Intense"],
+        sale_only=True,
+        fuzzy=False,
+        notes="50ml ok",
+    )
     item_id = db.add_watch_item(conn, item)
 
     [loaded] = db.list_watch_items(conn)
     assert loaded.id == item_id
     assert loaded.name == "Virēre"
     assert loaded.variants == ["Virere", "Vi rere"]
+    assert loaded.excludes == ["Virēre Intense"]
     assert loaded.sale_only is True
     assert loaded.fuzzy is False
     assert loaded.notes == "50ml ok"

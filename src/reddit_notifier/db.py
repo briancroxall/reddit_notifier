@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS watch_items (
     id          INTEGER PRIMARY KEY,
     name        TEXT NOT NULL,
     variants    TEXT NOT NULL DEFAULT '[]',   -- JSON list of strings
+    excludes    TEXT NOT NULL DEFAULT '[]',   -- JSON list of strings
     sale_only   INTEGER NOT NULL DEFAULT 0,
     fuzzy       INTEGER NOT NULL DEFAULT 1,
     notes       TEXT NOT NULL DEFAULT '',
@@ -72,11 +73,12 @@ def connect(path: Path) -> sqlite3.Connection:
 def add_watch_item(conn: sqlite3.Connection, item: WatchItem) -> int:
     with conn:
         cur = conn.execute(
-            "INSERT INTO watch_items (name, variants, sale_only, fuzzy, notes, created_at)"
-            " VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO watch_items (name, variants, excludes, sale_only, fuzzy, notes, created_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?)",
             (
                 item.name,
                 json.dumps(item.variants),
+                json.dumps(item.excludes),
                 item.sale_only,
                 item.fuzzy,
                 item.notes,
@@ -93,6 +95,7 @@ def list_watch_items(conn: sqlite3.Connection) -> list[WatchItem]:
             id=row["id"],
             name=row["name"],
             variants=json.loads(row["variants"]),
+            excludes=json.loads(row["excludes"]),
             sale_only=bool(row["sale_only"]),
             fuzzy=bool(row["fuzzy"]),
             notes=row["notes"],

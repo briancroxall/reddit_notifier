@@ -127,6 +127,37 @@ def test_two_typos_only_for_long_names():
     assert match_post(post("[WTS] Vridie"), [short_item]) == []
 
 
+# --- excludes ----------------------------------------------------------------
+
+AVENTUS = WatchItem("Aventus", excludes=["Aventus Cologne", "Aventus for Her"])
+
+
+def test_exclude_blocks_other_fragrance():
+    assert match_post(post("[WTS] Aventus Cologne 100ml"), [AVENTUS]) == []
+    assert match_post(post("[WTS] Lot", "aventus-cologne, AVENTUS FOR HER"), [AVENTUS]) == []
+
+
+def test_exclude_keeps_real_mention_in_same_post():
+    p = post("[WTS] Creed Aventus, Aventus Cologne, Green Irish Tweed")
+    m = only_match(p, AVENTUS)
+    assert not m.fuzzy
+
+
+def test_exclude_body_mention_still_found():
+    p = post("[WTS] Aventus Cologne", "Also have a 50ml Aventus decant")
+    assert only_match(p, AVENTUS).where == "body"
+
+
+def test_excluded_phrase_does_not_fuzzy_match():
+    item = WatchItem("Viride", excludes=["Viride Intense"])
+    assert match_post(post("[WTS] Viride Intense 50ml"), [item]) == []
+
+
+def test_repeated_excluded_phrase():
+    p = post("[WTS] Aventus Cologne Aventus Cologne")
+    assert match_post(p, [AVENTUS]) == []
+
+
 # --- sale filter -------------------------------------------------------------
 
 
