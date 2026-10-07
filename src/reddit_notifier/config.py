@@ -41,7 +41,7 @@ def load_config(path: Path = DEFAULT_PATH) -> Config:
     if not topic or topic == "CHANGE-ME":
         raise ConfigError(f"Set [ntfy] topic in {path}.")
 
-    interval = float(data.get("poll_interval_minutes", 5))
+    interval = float(data.get("poll_interval_minutes", 10))
     return Config(
         subreddit=data.get("subreddit", "fragranceswap"),
         poll_interval_minutes=max(interval, MIN_INTERVAL_MINUTES),

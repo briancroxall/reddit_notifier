@@ -5,8 +5,8 @@
 # Subreddit to watch (no "r/").
 subreddit = "fragranceswap"
 
-# Minutes between polls. Minimum 2; 5 is polite and fast enough.
-poll_interval_minutes = 5
+# Minutes between polls (minimum 2). At 5, Reddit sometimes rate-limits the feed.
+poll_interval_minutes = 10
 
 # Reddit asks for a descriptive User-Agent that identifies you.
 user_agent = "python:reddit-notifier:v0.1 (by /u/parkaboy7)"

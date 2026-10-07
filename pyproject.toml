@@ -1,7 +1,7 @@
 [project]
 name = "reddit-notifier"
 version = "0.1.0"
-description = "Add your description here"
+description = "Push notifications when r/fragranceswap posts mention fragrances on your watchlist"
 readme = "README.md"
 authors = [
     { name = "Brian Croxall", email = "briancroxall@users.noreply.github.com" }
