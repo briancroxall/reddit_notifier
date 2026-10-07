@@ -258,6 +258,23 @@ def cmd_web(args, cfg, conn):
     serve(cfg, port=args.port)
 
 
+def cmd_service(args, cfg, conn):
+    from . import service
+
+    try:
+        if args.action in ("start", "restart"):
+            lines = service.start(cfg, args.config)
+        elif args.action == "stop":
+            lines = service.stop()
+        elif args.action == "status":
+            lines = service.status(cfg, conn)
+        else:
+            lines = service.logs(args.lines)
+    except service.ServiceError as e:
+        sys.exit(str(e))
+    print("\n".join(lines))
+
+
 def cmd_test_notify(args, cfg, conn):
     try:
         send_test(cfg)
@@ -306,6 +323,19 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("web", help="open the web UI (http://127.0.0.1:5050 by default)")
     p.add_argument("--port", type=int, help="port to use instead of web_port in config.toml")
     p.set_defaults(func=cmd_web)
+
+    p = sub.add_parser(
+        "service",
+        help="run the poller and web UI in the background on this Mac",
+        description="Run the poller and web UI in the background (macOS launchd)."
+        " start: start now and at every login (also restarts them)."
+        " stop: stop, and don't start again until `start`."
+        " status: are they running, and when was the last poll."
+        " logs: show recent log lines.",
+    )
+    p.add_argument("action", choices=["start", "stop", "restart", "status", "logs"])
+    p.add_argument("-n", "--lines", type=int, default=20, help="with logs: lines per log")
+    p.set_defaults(func=cmd_service)
 
     p = sub.add_parser("test-notify", help="send a test notification to your phone")
     p.set_defaults(func=cmd_test_notify)
