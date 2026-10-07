@@ -32,17 +32,25 @@ curl -s -o /dev/null -w '%{http_code} %{content_type}\n' -A "$A" "$U"
 `200 application/atom+xml` means it's allowed. A `403` means Reddit blocks
 this server's network, and the notifier should stay on a home computer.
 
-## 1. On your Mac: name the server
+## 1. On your Mac: tell things where the server is
 
-In a Mac terminal, set a shell variable so the later commands stay short.
-Use whatever you normally type after `ssh`:
+Two separate things, both on the Mac.
+
+**A. A temporary shortcut for this terminal window.** Type this, using
+whatever you normally type after `ssh`:
 
 ```sh
 SERVER=root@your-server.example.com
 ```
 
-Also add the server to the Mac's `config.toml`, so `reddit-notifier tunnel`
-knows where to connect. Put it at the end of the file:
+It prints nothing. It creates a shell variable: later commands say `$SERVER`
+and the shell swaps in the address, which keeps them short. It only lasts
+until you close that terminal window, so type it again in any new window you
+use for this runbook. Check it with `echo $SERVER`.
+
+**B. A permanent setting in `config.toml`,** so `reddit-notifier tunnel`
+(step 6) knows where to connect. Add these lines at the **end** of the file
+(in TOML, everything after a `[section]` line belongs to that section):
 
 ```toml
 [server]
