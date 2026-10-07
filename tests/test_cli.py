@@ -1,5 +1,6 @@
 """Polling tests with a fake feed and a fake notifier: no network, no phone."""
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -152,3 +153,87 @@ def test_watch_commands(cfg, capsys):
     a = parser.parse_args(["watch", "remove", str(item.id)])
     a.func(a, cfg, conn)
     assert db.list_watch_items(conn) == []
+
+
+# --- trouble alerts ----------------------------------------------------------
+
+T0 = datetime(2026, 10, 7, 12, 0, tzinfo=UTC)
+
+
+def minutes(n):
+    return T0 + timedelta(minutes=n)
+
+
+def test_brief_trouble_never_alerts():
+    monitor = cli.TroubleMonitor(alert_after_minutes=60)
+    assert monitor.failed("HTTP 429", minutes(0)) is None
+    assert monitor.failed("HTTP 429", minutes(20)) is None
+    assert monitor.succeeded(minutes(30)) is None  # no "working again" either
+
+
+def test_alert_once_after_threshold_then_recovery():
+    monitor = cli.TroubleMonitor(alert_after_minutes=60)
+    assert monitor.failed("HTTP 429", minutes(0)) is None
+    assert monitor.failed("HTTP 429", minutes(50)) is None
+
+    alert = monitor.failed("HTTP 403 blocked", minutes(80))
+    assert alert.title == "Reddit notifier is having trouble"
+    assert "80 minutes" in alert.message
+    assert "HTTP 403 blocked" in alert.message  # the latest error
+    assert monitor.failed("HTTP 403 blocked", minutes(110)) is None  # only once
+
+    recovered = monitor.succeeded(minutes(140))
+    assert recovered.title == "Reddit notifier is working again"
+    assert "140 minutes" in recovered.message
+
+
+def test_new_trouble_starts_a_fresh_clock():
+    monitor = cli.TroubleMonitor(alert_after_minutes=60)
+    monitor.failed("x", minutes(0))
+    monitor.succeeded(minutes(30))
+    assert monitor.failed("x", minutes(70)) is None  # only 0 minutes into new trouble
+    assert monitor.failed("x", minutes(130)) is not None
+
+
+def test_failed_alert_send_does_not_crash(cfg, monkeypatch, capsys):
+    def broken_send(*args, **kwargs):
+        raise NotifyError("ntfy is down")
+
+    monkeypatch.setattr(cli, "send", broken_send)
+    cli.send_alert(cfg, cli.Alert("Title", "Message", ["warning"]))
+    assert "Couldn't send that alert: ntfy is down" in capsys.readouterr().out
+
+
+class StopLoop(Exception):
+    pass
+
+
+def test_run_forever_sends_trouble_and_recovery(cfg, conn, world, monkeypatch):
+    cli.poll_once(cfg, conn)  # seed
+    cfg.alert_after_minutes = 0  # alert on the first failure
+    sent = []
+    monkeypatch.setattr(cli, "send", lambda cfg, title, message, tags: sent.append(title))
+
+    results = iter([FetchError("offline"), None])  # fail once, then succeed
+    real_fetch = cli.fetch_posts
+
+    def flaky_fetch(url, user_agent):
+        if (r := next(results)) is not None:
+            raise r
+        return real_fetch(url, user_agent)
+
+    sleeps = []
+
+    def fake_sleep(seconds):
+        sleeps.append(seconds)
+        if len(sleeps) == 2:
+            raise StopLoop
+
+    monkeypatch.setattr(cli, "fetch_posts", flaky_fetch)
+    monkeypatch.setattr(cli.time, "sleep", fake_sleep)
+    with pytest.raises(StopLoop):
+        cli.run_forever(cfg, conn)
+
+    assert sent == ["Reddit notifier is having trouble", "Reddit notifier is working again"]
+    assert sleeps == [600, 300]  # backed off after the failure, normal after success
+    assert db.last_poll(conn)["status"] == "ok"

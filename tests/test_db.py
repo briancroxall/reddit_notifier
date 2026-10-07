@@ -123,3 +123,30 @@ def test_upgrade_adds_read_at_to_old_database(tmp_path):
     assert row["read_at"] is None
     assert db.count_unread(conn) == 1
     db.connect(path)  # running it again is harmless
+
+
+def test_config_paths_are_relative_to_the_config_file(tmp_path, monkeypatch):
+    from reddit_notifier.config import load_config
+
+    (tmp_path / "config.toml").write_text('[ntfy]\ntopic = "t"\n')
+    monkeypatch.chdir("/")  # run from somewhere else entirely
+    cfg = load_config(tmp_path / "config.toml")
+    assert cfg.db_path == tmp_path.resolve() / "data" / "notifier.db"
+    assert cfg.poll_interval_minutes == 10
+    assert cfg.alert_after_minutes == 60
+    assert cfg.feed_url == "https://www.reddit.com/r/fragranceswap/new/.rss?limit=100"
+
+
+def test_config_feed_url_override_and_absolute_db_path(tmp_path):
+    from reddit_notifier.config import load_config
+
+    (tmp_path / "config.toml").write_text(
+        'feed_url = "http://127.0.0.1:9/feed"\n'
+        'db_path = "/tmp/elsewhere.db"\n'
+        'alert_after_minutes = 5\n'
+        '[ntfy]\ntopic = "t"\n'
+    )
+    cfg = load_config(tmp_path / "config.toml")
+    assert cfg.feed_url == "http://127.0.0.1:9/feed"
+    assert str(cfg.db_path) == "/tmp/elsewhere.db"
+    assert cfg.alert_after_minutes == 5

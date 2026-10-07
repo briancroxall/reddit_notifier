@@ -8,6 +8,7 @@ without changing the rest of the program.
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from html.parser import HTMLParser
+from urllib.parse import urlsplit
 
 import requests
 
@@ -110,6 +111,12 @@ def fetch_posts(feed_url: str, user_agent: str) -> list[Post]:
         response = requests.get(
             feed_url, headers={"User-Agent": user_agent}, timeout=TIMEOUT_SECONDS
         )
+    except requests.Timeout as e:
+        raise FetchError(f"Network problem: no answer within {TIMEOUT_SECONDS} seconds") from e
+    except requests.ConnectionError as e:
+        # requests' own message is long and technical; this one shows up on the phone.
+        host = urlsplit(feed_url).hostname
+        raise FetchError(f"Network problem: couldn't connect to {host}") from e
     except requests.RequestException as e:
         raise FetchError(f"Network problem: {e}") from e
 

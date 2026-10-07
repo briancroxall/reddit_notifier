@@ -18,6 +18,10 @@ db_path = "data/notifier.db"
 # Change it if another program is already using this port.
 web_port = 5050
 
+# If polling keeps failing (Reddit refusing, no internet...) for this many
+# minutes, send one alert to your phone, and another when it works again.
+alert_after_minutes = 60
+
 [ntfy]
 server = "https://ntfy.sh"
 # Anyone who knows the topic name can read it, so make it hard to guess,

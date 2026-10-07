@@ -4,14 +4,15 @@ import argparse
 import sys
 import time
 import traceback
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from . import db
 from .config import DEFAULT_PATH, Config, ConfigError, load_config
 from .feed import FetchError, RateLimited, fetch_posts
 from .matcher import WatchItem, match_post, matching_posts
-from .notify import NotifyError, describe, notify_post, send_test
+from .notify import NotifyError, describe, notify_post, send, send_test
 
 MAX_WAIT_SECONDS = 30 * 60
 
@@ -90,31 +91,93 @@ def next_wait(cfg: Config, failures: int, retry_after: float | None = None) -> f
     return min(wait, MAX_WAIT_SECONDS)
 
 
+@dataclass
+class Alert:
+    title: str
+    message: str
+    tags: list[str]
+
+
+class TroubleMonitor:
+    """Decides when to tell the phone that polling is failing, and when it
+    has recovered. One alert per stretch of trouble, not one per failure.
+    Brief problems (a single 429) never alert."""
+
+    def __init__(self, alert_after_minutes: float):
+        self.alert_after_minutes = alert_after_minutes
+        self.since: datetime | None = None  # when the current trouble began
+        self.alerted = False
+
+    def failed(self, error: str, now: datetime) -> Alert | None:
+        if self.since is None:
+            self.since = now
+        minutes = (now - self.since).total_seconds() / 60
+        if self.alerted or minutes < self.alert_after_minutes:
+            return None
+        self.alerted = True
+        return Alert(
+            "Reddit notifier is having trouble",
+            f"Checks have been failing for {minutes:.0f} minutes"
+            f" (since {db.localtime(self.since.isoformat())})."
+            f" Latest error: {error}\nIt will keep retrying.",
+            ["warning"],
+        )
+
+    def succeeded(self, now: datetime) -> Alert | None:
+        since, alerted = self.since, self.alerted
+        self.since, self.alerted = None, False
+        if not alerted:
+            return None
+        minutes = (now - since).total_seconds() / 60
+        return Alert(
+            "Reddit notifier is working again",
+            f"Checks are succeeding again after {minutes:.0f} minutes of trouble.",
+            ["white_check_mark"],
+        )
+
+
+def send_alert(cfg: Config, alert: Alert | None) -> None:
+    if alert is None:
+        return
+    say(f"{alert.title}. {alert.message}")
+    try:
+        send(cfg, alert.title, alert.message, tags=alert.tags)
+    except Exception as e:  # never let an alert stop the watcher
+        say(f"Couldn't send that alert: {e}")
+
+
 def run_forever(cfg: Config, conn) -> None:
     say(
         f"Watching r/{cfg.subreddit} every {cfg.poll_interval_minutes:g} minutes."
         " Press Ctrl-C to stop."
     )
+    monitor = TroubleMonitor(cfg.alert_after_minutes)
     failures = 0
     while True:
         retry_after = None
+        error = None
         try:
             poll_once(cfg, conn)
             failures = 0
         except RateLimited as e:
-            failures += 1
             retry_after = e.retry_after
-            say(str(e))
-            db.log_poll(conn, "error", error=str(e))
+            error = str(e)
+            say(error)
         except FetchError as e:
-            failures += 1
+            error = str(e)
             say(f"Couldn't fetch the feed: {e}")
-            db.log_poll(conn, "error", error=str(e))
-        except Exception:
+        except Exception as e:
             # A bug shouldn't stop the watcher for good; log it and keep going.
-            failures += 1
+            error = f"Unexpected error: {e}"
             say("Unexpected error:\n" + traceback.format_exc())
-            db.log_poll(conn, "error", error=traceback.format_exc(limit=3))
+
+        now = datetime.now(UTC)
+        if error is None:
+            send_alert(cfg, monitor.succeeded(now))
+        else:
+            failures += 1
+            db.log_poll(conn, "error", error=error)
+            send_alert(cfg, monitor.failed(error, now))
 
         wait = next_wait(cfg, failures, retry_after)
         if failures:

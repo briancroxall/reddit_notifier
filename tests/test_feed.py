@@ -116,3 +116,15 @@ def test_fetch_network_error(monkeypatch):
     monkeypatch.setattr(feed.requests, "get", fake_get(error=requests.ConnectionError("offline")))
     with pytest.raises(feed.FetchError, match="Network problem"):
         feed.fetch_posts("https://example.com/feed", "ua")
+
+
+def test_fetch_network_errors_are_short(monkeypatch):
+    error = requests.ConnectionError("HTTPConnectionPool(host=...): Max retries exceeded ...")
+    monkeypatch.setattr(feed.requests, "get", fake_get(error=error))
+    with pytest.raises(feed.FetchError) as info:
+        feed.fetch_posts("https://www.reddit.com/r/x/new/.rss", "ua")
+    assert str(info.value) == "Network problem: couldn't connect to www.reddit.com"
+
+    monkeypatch.setattr(feed.requests, "get", fake_get(error=requests.Timeout("read timed out")))
+    with pytest.raises(feed.FetchError, match="no answer within 30 seconds"):
+        feed.fetch_posts("https://www.reddit.com/r/x/new/.rss", "ua")
