@@ -171,3 +171,7 @@ send notifications.
   that happens, `feed.py` would need to move to the official API.
 - **RSS doesn't include post flair**, so "sale only" relies on the `[WTS]`
   tag in the title, which r/fragranceswap uses consistently.
+
+## License
+
+[MIT](LICENSE)

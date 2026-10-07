@@ -3,6 +3,8 @@ name = "reddit-notifier"
 version = "0.1.0"
 description = "Push notifications when r/fragranceswap posts mention fragrances on your watchlist"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "Brian Croxall", email = "briancroxall@users.noreply.github.com" }
 ]
