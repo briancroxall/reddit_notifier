@@ -1,6 +1,7 @@
 """Command-line interface: `uv run reddit-notifier --help`."""
 
 import argparse
+import subprocess
 import sys
 import time
 import traceback
@@ -275,6 +276,38 @@ def cmd_service(args, cfg, conn):
     print("\n".join(lines))
 
 
+def tunnel_command(cfg: Config) -> list[str]:
+    return [
+        "ssh", "-N",  # -N: forward the port only; don't open a shell
+        "-L", f"{cfg.tunnel_port}:127.0.0.1:{cfg.web_port}",
+        "-o", "ExitOnForwardFailure=yes",  # fail loudly if the local port is taken
+        "-o", "ServerAliveInterval=60",  # keep a quiet connection from dropping
+        cfg.server_ssh,
+    ]
+
+
+def cmd_tunnel(args, cfg, conn):
+    if not cfg.server_ssh:
+        sys.exit(
+            "Set the server in config.toml first, e.g.:\n"
+            "  [server]\n"
+            '  ssh = "root@your-server.example.com"'
+        )
+    conn.close()
+    print(
+        f"Connecting to {cfg.server_ssh}...\n"
+        f"While this runs, the server's web UI is at http://127.0.0.1:{cfg.tunnel_port}\n"
+        "Press Ctrl-C to close the tunnel."
+    )
+    try:
+        result = subprocess.run(tunnel_command(cfg))
+    except KeyboardInterrupt:
+        print("\nTunnel closed.")
+        return
+    if result.returncode != 0:
+        sys.exit(f"The tunnel stopped (ssh exit code {result.returncode}).")
+
+
 def cmd_test_notify(args, cfg, conn):
     try:
         send_test(cfg)
@@ -336,6 +369,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("action", choices=["start", "stop", "restart", "status", "logs"])
     p.add_argument("-n", "--lines", type=int, default=20, help="with logs: lines per log")
     p.set_defaults(func=cmd_service)
+
+    p = sub.add_parser("tunnel", help="show the server's web UI on this computer (via ssh)")
+    p.set_defaults(func=cmd_tunnel)
 
     p = sub.add_parser("test-notify", help="send a test notification to your phone")
     p.set_defaults(func=cmd_test_notify)

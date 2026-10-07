@@ -25,6 +25,9 @@ class Config:
     alert_after_minutes: float = 60
     # Normally built from `subreddit`; set it to test against another address.
     custom_feed_url: str = ""
+    # [server] section: where the notifier runs remotely, for `tunnel`.
+    server_ssh: str = ""  # e.g. "root@example.com"
+    tunnel_port: int = 5051  # local port for the tunneled web UI
 
     @property
     def feed_url(self) -> str:
@@ -63,4 +66,6 @@ def load_config(path: Path = DEFAULT_PATH) -> Config:
         web_port=int(data.get("web_port", 5050)),
         alert_after_minutes=float(data.get("alert_after_minutes", 60)),
         custom_feed_url=data.get("feed_url", ""),
+        server_ssh=data.get("server", {}).get("ssh", ""),
+        tunnel_port=int(data.get("server", {}).get("tunnel_port", 5051)),
     )

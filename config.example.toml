@@ -27,3 +27,9 @@ server = "https://ntfy.sh"
 # Anyone who knows the topic name can read it, so make it hard to guess,
 # e.g. "fragswap-" followed by random letters and digits.
 topic = "CHANGE-ME"
+
+# Only needed if the notifier runs on a server (see docs/deploy-droplet.md).
+# `reddit-notifier tunnel` uses these to show the server's web UI on this computer.
+# [server]
+# ssh = "root@your-server.example.com"   # what you'd type after `ssh`
+# tunnel_port = 5051                     # then open http://127.0.0.1:5051

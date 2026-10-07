@@ -1,0 +1,24 @@
+[Unit]
+Description=reddit-notifier web UI (127.0.0.1 only; reach it with `reddit-notifier tunnel`)
+After=network.target
+
+[Service]
+Type=simple
+User=fragdash
+Group=fragdash
+WorkingDirectory=/opt/reddit-notifier
+Environment=PYTHONUNBUFFERED=1
+# Listens on 127.0.0.1 only, so it's not reachable from the internet; the
+# DigitalOcean firewall needs no changes.
+ExecStart=/home/fragdash/.local/bin/uv run --frozen reddit-notifier --config /opt/reddit-notifier/config.toml web
+Restart=on-failure
+RestartSec=30
+
+# Hardening (same as Noted's fragdash.service)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=false
+
+[Install]
+WantedBy=multi-user.target

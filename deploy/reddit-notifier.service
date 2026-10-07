@@ -1,0 +1,25 @@
+[Unit]
+Description=reddit-notifier poller (checks Reddit, sends phone alerts)
+# Wait for the network, so the first poll doesn't fail at boot.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=fragdash
+Group=fragdash
+WorkingDirectory=/opt/reddit-notifier
+Environment=PYTHONUNBUFFERED=1
+# Adjust the uv path if it lives elsewhere. Find it with: sudo -u fragdash which uv
+ExecStart=/home/fragdash/.local/bin/uv run --frozen reddit-notifier --config /opt/reddit-notifier/config.toml run
+Restart=on-failure
+RestartSec=30
+
+# Hardening (same as Noted's fragdash.service)
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=false
+
+[Install]
+WantedBy=multi-user.target

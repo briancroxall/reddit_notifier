@@ -145,8 +145,11 @@ def test_config_feed_url_override_and_absolute_db_path(tmp_path):
         'db_path = "/tmp/elsewhere.db"\n'
         'alert_after_minutes = 5\n'
         '[ntfy]\ntopic = "t"\n'
+        '[server]\nssh = "root@example.com"\ntunnel_port = 6000\n'
     )
     cfg = load_config(tmp_path / "config.toml")
     assert cfg.feed_url == "http://127.0.0.1:9/feed"
     assert str(cfg.db_path) == "/tmp/elsewhere.db"
     assert cfg.alert_after_minutes == 5
+    assert cfg.server_ssh == "root@example.com"
+    assert cfg.tunnel_port == 6000
