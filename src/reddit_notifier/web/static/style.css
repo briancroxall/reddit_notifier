@@ -1,0 +1,220 @@
+/* Adapted from Noted (fragdash/app/static/css/style.css): same color tokens,
+   type, and component styles, trimmed to what this app uses. Copied rather
+   than linked so the two projects stay independent. */
+
+/* ── Reset & base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #faf8f5;
+  --surface: #ffffff;
+  --border: #e5e1da;
+  --text: #2d2a26;
+  --muted: #7a7470;
+  --accent: #8b5e3c;
+  --accent-hover: #6e4a2e;
+  --success-bg: #d4edda;
+  --success-text: #155724;
+  --warning-bg: #fff3cd;
+  --warning-text: #856404;
+  --error-bg: #f8d7da;
+  --error-text: #721c24;
+
+  /* Avenir Next ships with macOS. Noted self-hosts Bodoni Moda for titles;
+     here titles fall back to Georgia. */
+  --font-sans: "Avenir Next", "Avenir", "Nunito Sans", -apple-system,
+               BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Bodoni Moda", Georgia, "Times New Roman", serif;
+  --font-system: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+button, input, select, textarea { font-family: inherit; }
+
+h1 { font-family: var(--font-serif); font-weight: 500; letter-spacing: 0.005em; }
+h2 { font-size: 1.1rem; margin: 2rem 0 0.75rem; }
+
+/* ── Navbar ── */
+.navbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0.75rem 2rem;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+.nav-brand {
+  font-family: var(--font-system);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.nav-brand:hover { text-decoration: none; }
+.nav-links { list-style: none; display: flex; gap: 1.5rem; align-items: center; }
+.nav-links a { color: var(--text); font-size: 0.95rem; }
+.nav-links a:hover { color: var(--accent); text-decoration: none; }
+.nav-links form { margin: 0; }
+.nav-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+  font-size: 0.95rem;
+  padding: 0;
+}
+.nav-btn:hover { color: var(--accent); }
+
+/* ── Container ── */
+.container { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem; }
+
+/* ── Flash messages ── */
+.flash-messages { margin-bottom: 1rem; }
+.flash {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+.flash-success { background: var(--success-bg); color: var(--success-text); }
+.flash-warning { background: var(--warning-bg); color: var(--warning-text); }
+.flash-error   { background: var(--error-bg);   color: var(--error-text);   }
+.flash-info    { background: #d1ecf1;            color: #0c5460;             }
+
+/* ── Buttons ── */
+.btn {
+  display: inline-block;
+  padding: 0.65rem 1.1rem;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  line-height: 1.2;
+  transition: background 0.15s;
+  text-decoration: none;
+}
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-primary:hover { background: var(--accent-hover); text-decoration: none; color: #fff; }
+.btn-secondary { background: var(--border); color: var(--text); }
+.btn-secondary:hover { background: #d5d0c8; text-decoration: none; }
+.btn-link { background: transparent; color: var(--accent); padding: 0.5rem 0.5rem; }
+.btn-sm { padding: 0.25rem 0.6rem; font-size: 0.8rem; }
+.btn-danger { background: #e74c3c; color: #fff; }
+.btn-danger:hover { background: #c0392b; text-decoration: none; color: #fff; }
+
+/* ── Page header ── */
+.page-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+.page-header h1 { font-size: 2.2rem; }
+.subtitle { color: var(--muted); font-size: 0.9rem; margin-top: 0.25rem; }
+
+/* ── Status card (home page) ── */
+.status-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  max-width: 560px;
+}
+.status-card .error-text { color: var(--error-text); font-size: 0.85rem; white-space: pre-wrap; }
+.badge {
+  display: inline-block;
+  padding: 0.05rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.badge-ok     { background: var(--success-bg); color: var(--success-text); }
+.badge-seeded { background: #d1ecf1;           color: #0c5460; }
+.badge-error  { background: var(--error-bg);   color: var(--error-text); }
+.badge-new    { background: var(--accent);     color: #fff; }
+
+/* ── Matches ── */
+.section-header { display: flex; align-items: baseline; gap: 1rem; }
+.section-header form { margin: 0; }
+tr.unread .post-link { font-weight: 600; }
+
+/* ── Empty state ── */
+.empty-state { text-align: center; padding: 3rem; color: var(--muted); }
+.empty-state .btn { margin-top: 1rem; }
+
+/* ── Forms ── */
+.form-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.75rem;
+  max-width: 560px;
+}
+.form-group { margin-bottom: 1rem; }
+.form-group label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+  color: var(--text);
+}
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: var(--bg);
+  color: var(--text);
+  transition: border-color 0.15s;
+}
+.form-group input:focus,
+.form-group textarea:focus { outline: none; border-color: var(--accent); }
+.form-actions { display: flex; gap: 0.75rem; align-items: center; margin-top: 0.5rem; }
+.checkbox-label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; cursor: pointer; }
+.form-group .checkbox-label { font-weight: 400; }
+.checkbox-label input[type="checkbox"] { width: auto; margin: 0; cursor: pointer; }
+.field-hint { font-size: 0.78rem; color: var(--muted); font-weight: 400; margin-left: 0.25rem; }
+
+/* ── Tables ── */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.data-table th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 2px solid var(--border);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.data-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.date-cell { white-space: nowrap; color: var(--muted); font-size: 0.85rem; }
+.time-muted { font-size: 0.8rem; color: var(--muted); }
+.actions-cell { white-space: nowrap; }
+.actions-cell form { display: inline; }
+
+/* ── Watchlist form ── */
+.form-group .checkbox-label + .checkbox-label { margin-top: 0.4rem; }
+.danger-zone { margin-top: 1.5rem; display: flex; gap: 0.75rem; align-items: center; }
+.form-group ::placeholder { color: var(--muted); opacity: 0.6; }
+.matched-cell { min-width: 11rem; }

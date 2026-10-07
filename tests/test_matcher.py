@@ -6,6 +6,7 @@ from reddit_notifier.matcher import (
     WatchItem,
     is_sale_post,
     match_post,
+    matching_posts,
     normalize,
     typo_distance,
 )
@@ -186,6 +187,13 @@ def test_sale_only_item_skips_trade_posts():
 
 def test_non_sale_only_item_matches_any_post():
     only_match(post("[WTT] Viride"), WatchItem("Viride", sale_only=False))
+
+
+def test_matching_posts_keeps_feed_order():
+    posts = [post("[WTS] Viride"), post("[WTS] Nothing here"), post("[WTT] Orage", "Viride too")]
+    results = matching_posts(posts, [WatchItem("Viride"), WatchItem("Orage")])
+    assert [p.title for p, _ in results] == ["[WTS] Viride", "[WTT] Orage"]
+    assert [m.item.name for m in results[1][1]] == ["Viride", "Orage"]
 
 
 def test_multiple_items():

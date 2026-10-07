@@ -20,6 +20,7 @@ class Config:
     db_path: Path
     ntfy_server: str
     ntfy_topic: str
+    web_port: int = 5050
 
     @property
     def feed_url(self) -> str:
@@ -50,4 +51,5 @@ def load_config(path: Path = DEFAULT_PATH) -> Config:
         db_path=Path(data.get("db_path", "data/notifier.db")),
         ntfy_server=ntfy.get("server", "https://ntfy.sh").rstrip("/"),
         ntfy_topic=topic,
+        web_port=int(data.get("web_port", 5050)),
     )

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+
+{% block title %}Recent posts — Reddit Notifier{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Recent posts</h1>
+    <p class="subtitle">Matching {{ label }} · a preview only: nothing was notified or saved</p>
+  </div>
+  {% if item %}
+    <a href="{{ url_for('edit_item', item_id=item.id) }}" class="btn btn-secondary">Edit {{ item.name }}</a>
+  {% endif %}
+</div>
+
+{% if error %}
+  <div class="flash flash-error">
+    Couldn't get recent posts from Reddit: {{ error }}
+    Try again in a few minutes.
+  </div>
+{% else %}
+  {% if problem %}
+    <div class="flash flash-warning">
+      Reddit didn't answer just now ({{ problem }}), so these results use posts
+      fetched {{ fetched_at | timeago }}.
+    </div>
+  {% endif %}
+
+  <p class="subtitle">
+    Checked the {{ posts | length }} newest posts
+    {% if posts %}(since {{ posts[-1].published | localtime }}){% endif %}.
+    Feed fetched {{ fetched_at | timeago }}{% if not problem %}; checks reuse it for 5 minutes{% endif %}.
+  </p>
+
+  {% if results %}
+    <div class="table-scroll">
+    <table class="data-table">
+      <thead>
+        <tr><th>Posted</th><th>Post</th><th>Matched</th></tr>
+      </thead>
+      <tbody>
+        {% for post, matches in results %}
+          <tr>
+            <td class="date-cell">
+              {{ post.published | timeago }}<br>
+              <span class="time-muted">{{ post.published | localtime }}</span>
+            </td>
+            <td><a href="{{ post.url }}" target="_blank" rel="noopener">{{ post.title }}</a></td>
+            <td class="matched-cell">
+              {% for m in matches %}{{ describe(m) }}{% if not loop.last %}<br>{% endif %}{% endfor %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% else %}
+    <p class="empty-state">No recent posts match {{ label }}.</p>
+  {% endif %}
+{% endif %}
+{% endblock %}

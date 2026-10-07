@@ -38,8 +38,9 @@ CREATE TABLE IF NOT EXISTS matches (
     where_found   TEXT NOT NULL,              -- "title" or "body"
     title         TEXT NOT NULL,
     url           TEXT NOT NULL,
-    notified      INTEGER NOT NULL,           -- 0 for --dry-run
-    matched_at    TEXT NOT NULL
+    notified      INTEGER NOT NULL,           -- 1 if a phone notification went out
+    matched_at    TEXT NOT NULL,
+    read_at       TEXT                        -- when marked read in the web UI
 );
 
 CREATE TABLE IF NOT EXISTS poll_log (
@@ -57,6 +58,13 @@ def now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
+def localtime(iso: str | None) -> str:
+    """A stored (or feed) timestamp in this computer's time zone, e.g. "Oct 6, 2:02 PM"."""
+    if not iso:
+        return ""
+    return datetime.fromisoformat(iso).astimezone().strftime("%b %-d, %-I:%M %p")
+
+
 def connect(path: Path) -> sqlite3.Connection:
     """Open the database, creating the file and tables if needed."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -64,7 +72,17 @@ def connect(path: Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.executescript(SCHEMA)
+    upgrade(conn)
     return conn
+
+
+def upgrade(conn: sqlite3.Connection) -> None:
+    """Add columns introduced after a database was first created.
+    CREATE TABLE IF NOT EXISTS leaves existing tables as they were."""
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(matches)")}
+    if "read_at" not in columns:
+        with conn:
+            conn.execute("ALTER TABLE matches ADD COLUMN read_at TEXT")
 
 
 # --- watchlist ---------------------------------------------------------------
@@ -88,20 +106,45 @@ def add_watch_item(conn: sqlite3.Connection, item: WatchItem) -> int:
     return cur.lastrowid
 
 
+def _row_to_item(row: sqlite3.Row) -> WatchItem:
+    return WatchItem(
+        id=row["id"],
+        name=row["name"],
+        variants=json.loads(row["variants"]),
+        excludes=json.loads(row["excludes"]),
+        sale_only=bool(row["sale_only"]),
+        fuzzy=bool(row["fuzzy"]),
+        notes=row["notes"],
+    )
+
+
 def list_watch_items(conn: sqlite3.Connection) -> list[WatchItem]:
     rows = conn.execute("SELECT * FROM watch_items ORDER BY name COLLATE NOCASE")
-    return [
-        WatchItem(
-            id=row["id"],
-            name=row["name"],
-            variants=json.loads(row["variants"]),
-            excludes=json.loads(row["excludes"]),
-            sale_only=bool(row["sale_only"]),
-            fuzzy=bool(row["fuzzy"]),
-            notes=row["notes"],
+    return [_row_to_item(row) for row in rows]
+
+
+def get_watch_item(conn: sqlite3.Connection, item_id: int) -> WatchItem | None:
+    row = conn.execute("SELECT * FROM watch_items WHERE id = ?", (item_id,)).fetchone()
+    return _row_to_item(row) if row else None
+
+
+def update_watch_item(conn: sqlite3.Connection, item: WatchItem) -> bool:
+    """Save changes to an existing item (matched by item.id)."""
+    with conn:
+        cur = conn.execute(
+            "UPDATE watch_items SET name = ?, variants = ?, excludes = ?,"
+            " sale_only = ?, fuzzy = ?, notes = ? WHERE id = ?",
+            (
+                item.name,
+                json.dumps(item.variants),
+                json.dumps(item.excludes),
+                item.sale_only,
+                item.fuzzy,
+                item.notes,
+                item.id,
+            ),
         )
-        for row in rows
-    ]
+    return cur.rowcount > 0
 
 
 def remove_watch_item(conn: sqlite3.Connection, item_id: int) -> bool:
@@ -172,6 +215,33 @@ def recent_matches(conn: sqlite3.Connection, limit: int = 50) -> list[sqlite3.Ro
     ).fetchall()
 
 
+def match_url(conn: sqlite3.Connection, post_id: str) -> str | None:
+    row = conn.execute("SELECT url FROM matches WHERE post_id = ? LIMIT 1", (post_id,)).fetchone()
+    return row["url"] if row else None
+
+
+def mark_read(conn: sqlite3.Connection, post_id: str) -> None:
+    """Mark every match for this post as read (a post can match several items)."""
+    with conn:
+        conn.execute(
+            "UPDATE matches SET read_at = ? WHERE post_id = ? AND read_at IS NULL",
+            (now(), post_id),
+        )
+
+
+def mark_all_read(conn: sqlite3.Connection) -> int:
+    with conn:
+        cur = conn.execute("UPDATE matches SET read_at = ? WHERE read_at IS NULL", (now(),))
+    return cur.rowcount
+
+
+def count_unread(conn: sqlite3.Connection) -> int:
+    """Number of matched posts not yet marked read."""
+    return conn.execute(
+        "SELECT COUNT(DISTINCT post_id) FROM matches WHERE read_at IS NULL"
+    ).fetchone()[0]
+
+
 def log_poll(
     conn: sqlite3.Connection,
     status: str,
@@ -189,3 +259,7 @@ def log_poll(
 
 def last_poll(conn: sqlite3.Connection) -> sqlite3.Row | None:
     return conn.execute("SELECT * FROM poll_log ORDER BY id DESC LIMIT 1").fetchone()
+
+
+def recent_polls(conn: sqlite3.Connection, limit: int = 10) -> list[sqlite3.Row]:
+    return conn.execute("SELECT * FROM poll_log ORDER BY id DESC LIMIT ?", (limit,)).fetchall()

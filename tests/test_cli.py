@@ -74,19 +74,17 @@ def test_new_matching_post_notifies_once(cfg, conn, world):
     assert len(world.notified) == 1
 
 
-def test_dry_run_writes_nothing(cfg, conn, world, capsys):
-    cli.poll_once(cfg, conn, dry_run=True)
-    assert "WOULD NOTIFY: [WTS] Old Viride listing" in capsys.readouterr().out
+def dry_run(cfg, conn):
+    args = cli.build_parser().parse_args(["poll", "--dry-run"])
+    args.func(args, cfg, conn)
+
+
+def test_dry_run_on_empty_database_writes_nothing(cfg, conn, world, capsys):
+    dry_run(cfg, conn)
+    assert "[WTS] Old Viride listing" in capsys.readouterr().out
     assert world.notified == []
     assert db.has_seen_any(conn) is False
     assert db.last_poll(conn) is None
-
-
-def test_run_dry_run_does_not_repeat(cfg, conn, world, capsys):
-    dry_seen = set()
-    cli.poll_once(cfg, conn, dry_run=True, dry_seen=dry_seen)
-    cli.poll_once(cfg, conn, dry_run=True, dry_seen=dry_seen)
-    assert capsys.readouterr().out.count("WOULD NOTIFY") == 1
 
 
 def test_failed_notification_is_retried(cfg, conn, world):
@@ -101,6 +99,19 @@ def test_failed_notification_is_retried(cfg, conn, world):
     world.notify_fails = False
     cli.poll_once(cfg, conn)
     assert [p.id for p, _ in world.notified] == ["t3_2"]
+
+
+def test_dry_run_includes_seen_posts_and_writes_nothing(cfg, conn, world, capsys):
+    cli.poll_once(cfg, conn)  # seed: the Viride post is now "seen"
+    before = db.recent_matches(conn), db.last_poll(conn)["id"]
+
+    dry_run(cfg, conn)
+
+    out = capsys.readouterr().out
+    assert "[WTS] Old Viride listing" in out
+    assert "Checked 1 recent posts" in out
+    assert world.notified == []
+    assert (db.recent_matches(conn), db.last_poll(conn)["id"]) == before
 
 
 def test_fetch_error_propagates(cfg, conn, monkeypatch):

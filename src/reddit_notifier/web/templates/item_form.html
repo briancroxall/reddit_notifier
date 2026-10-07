@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+
+{% set heading = "Add a fragrance" if is_new else "Edit " ~ item.name %}
+{% block title %}{{ heading }} — Reddit Notifier{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <h1>{{ heading }}</h1>
+</div>
+
+{% if errors %}
+  <div class="flash-messages">
+    {% for error in errors %}<div class="flash flash-error">{{ error }}</div>{% endfor %}
+  </div>
+{% endif %}
+
+<form method="post" class="form-card">
+  <div class="form-group">
+    <label for="name">Name</label>
+    <input id="name" name="name" value="{{ item.name }}" required autofocus
+           placeholder="e.g. Mousse de Chene 30">
+  </div>
+
+  <div class="form-group">
+    <label for="variants">Also matches <span class="field-hint">one per line: other spellings or abbreviations</span></label>
+    <textarea id="variants" name="variants" rows="3" placeholder="e.g. MDC 30">{{ item.variants | join("\n") }}</textarea>
+  </div>
+
+  <div class="form-group">
+    <label for="excludes">Ignores <span class="field-hint">one per line: similarly named fragrances to skip</span></label>
+    <textarea id="excludes" name="excludes" rows="3" placeholder="e.g. Aventus Cologne">{{ item.excludes | join("\n") }}</textarea>
+  </div>
+
+  <div class="form-group">
+    <label class="checkbox-label">
+      <input type="checkbox" name="sale_only" {{ "checked" if item.sale_only }}>
+      Only [WTS] (for sale) posts
+    </label>
+    <label class="checkbox-label">
+      <input type="checkbox" name="fuzzy" {{ "checked" if item.fuzzy }}>
+      Allow typos (e.g. "Virdie" for "Viride")
+    </label>
+  </div>
+
+  <div class="form-group">
+    <label for="notes">Notes <span class="field-hint">just for you</span></label>
+    <input id="notes" name="notes" value="{{ item.notes }}" placeholder="e.g. 50ml or bigger">
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">{{ "Add" if is_new else "Save" }}</button>
+    <a href="{{ url_for('watchlist') }}" class="btn btn-link">Cancel</a>
+  </div>
+</form>
+
+{% if not is_new %}
+  <form method="post" action="{{ url_for('delete_item', item_id=item.id) }}" class="danger-zone"
+        onsubmit='return confirm({{ ("Delete " ~ item.name ~ " from your watchlist?") | tojson }})'>
+    <button type="submit" class="btn btn-danger btn-sm">Delete {{ item.name }}</button>
+    <span class="time-muted">Past matches stay on the Matches page.</span>
+  </form>
+{% endif %}
+{% endblock %}

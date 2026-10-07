@@ -14,6 +14,10 @@ user_agent = "python:reddit-notifier:v0.1 (by /u/parkaboy7)"
 # Where the SQLite database lives (relative to where you run the command).
 db_path = "data/notifier.db"
 
+# Port for the web UI (reddit-notifier web), at http://127.0.0.1:<port>.
+# Change it if another program is already using this port.
+web_port = 5050
+
 [ntfy]
 server = "https://ntfy.sh"
 # Anyone who knows the topic name can read it, so make it hard to guess,

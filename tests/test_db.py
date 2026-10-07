@@ -68,3 +68,58 @@ def test_poll_log(conn):
     last = db.last_poll(conn)
     assert last["status"] == "ok"
     assert last["n_new"] == 3
+
+
+def test_get_and_update_watch_item(conn):
+    item_id = db.add_watch_item(conn, WatchItem("Viride"))
+    item = db.get_watch_item(conn, item_id)
+    assert item.name == "Viride"
+
+    item.variants = ["Vi ride"]
+    item.excludes = ["Viride Intense"]
+    item.sale_only = True
+    item.fuzzy = False
+    item.notes = "edited"
+    assert db.update_watch_item(conn, item) is True
+    assert db.get_watch_item(conn, item_id) == item
+
+    assert db.get_watch_item(conn, 999) is None
+    assert db.update_watch_item(conn, WatchItem("Ghost", id=999)) is False
+
+
+def test_recent_polls_newest_first(conn):
+    for status in ["seeded", "ok", "error"]:
+        db.log_poll(conn, status)
+    assert [row["status"] for row in db.recent_polls(conn, limit=2)] == ["error", "ok"]
+
+
+def test_localtime():
+    assert db.localtime(None) == ""
+    # The exact text depends on this computer's time zone; check its shape.
+    assert db.localtime("2026-10-06T20:00:00+00:00").startswith("Oct ")
+
+
+def test_upgrade_adds_read_at_to_old_database(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    old = sqlite3.connect(path)
+    old.execute(
+        "CREATE TABLE matches (id INTEGER PRIMARY KEY, post_id TEXT NOT NULL,"
+        " watch_item_id INTEGER, item_name TEXT NOT NULL, term TEXT NOT NULL,"
+        " matched_text TEXT NOT NULL, fuzzy INTEGER NOT NULL, where_found TEXT NOT NULL,"
+        " title TEXT NOT NULL, url TEXT NOT NULL, notified INTEGER NOT NULL,"
+        " matched_at TEXT NOT NULL)"
+    )
+    old.execute(
+        "INSERT INTO matches VALUES (1, 't3_x', NULL, 'Viride', 'Viride', 'viride', 0,"
+        " 'title', '[WTS] Viride', 'https://reddit.com/x', 1, '2026-10-06T20:00:00+00:00')"
+    )
+    old.commit()
+    old.close()
+
+    conn = db.connect(path)  # runs the upgrade
+    [row] = db.recent_matches(conn)
+    assert row["read_at"] is None
+    assert db.count_unread(conn) == 1
+    db.connect(path)  # running it again is harmless

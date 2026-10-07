@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Reddit Notifier{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <nav class="navbar">
+    <a class="nav-brand" href="{{ url_for('home') }}">Reddit Notifier</a>
+    <ul class="nav-links">
+      <li><a href="{{ url_for('home') }}">Matches<span id="nav-unread">{% if unread_count %} ({{ unread_count }}){% endif %}</span></a></li>
+      <li><a href="{{ url_for('watchlist') }}">Watchlist</a></li>
+      <li>
+        <form method="post" action="{{ url_for('check_all') }}">
+          <button type="submit" class="nav-btn" title="Check your whole watchlist against the last ~12 hours of posts">Check recent posts</button>
+        </form>
+      </li>
+    </ul>
+  </nav>
+
+  <main class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-messages">
+          {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

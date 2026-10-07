@@ -10,7 +10,7 @@ from pathlib import Path
 from . import db
 from .config import DEFAULT_PATH, Config, ConfigError, load_config
 from .feed import FetchError, RateLimited, fetch_posts
-from .matcher import WatchItem, match_post
+from .matcher import WatchItem, match_post, matching_posts
 from .notify import NotifyError, describe, notify_post, send_test
 
 MAX_WAIT_SECONDS = 30 * 60
@@ -23,27 +23,23 @@ def say(message: str) -> None:
 # --- polling -----------------------------------------------------------------
 
 
-def poll_once(cfg: Config, conn, dry_run: bool = False, dry_seen: set[str] | None = None) -> None:
-    """Fetch the feed once, then notify about (or print) new matching posts.
+def poll_once(cfg: Config, conn) -> None:
+    """Fetch the feed once, then notify about new matching posts.
 
-    A real poll on an empty database only records what's already there, so
-    you aren't flooded with alerts for old posts. A dry run never writes to
-    the database; `dry_seen` stops `run --dry-run` repeating itself.
+    The first poll on an empty database only records what's already there,
+    so you aren't flooded with alerts for old posts.
     Raises FetchError / RateLimited if the feed can't be fetched.
     """
     posts = fetch_posts(cfg.feed_url, cfg.user_agent)
     ids = [p.id for p in posts]
 
-    if not dry_run and not db.has_seen_any(conn):
+    if not db.has_seen_any(conn):
         db.mark_seen(conn, ids)
         db.log_poll(conn, "seeded", n_posts=len(posts))
         say(f"First run: recorded {len(posts)} existing posts. Only newer posts will alert you.")
         return
 
     new_ids = db.unseen(conn, ids)
-    if dry_seen is not None:
-        new_ids -= dry_seen
-        dry_seen |= new_ids
     # The feed is newest-first; handle posts in the order they were made.
     new_posts = [p for p in reversed(posts) if p.id in new_ids]
 
@@ -57,30 +53,26 @@ def poll_once(cfg: Config, conn, dry_run: bool = False, dry_seen: set[str] | Non
         if matches:
             n_matched += 1
             summary = "; ".join(describe(m) for m in matches)
-            if dry_run:
-                say(f"WOULD NOTIFY: {post.title}\n    {summary}\n    {post.url}")
-            else:
-                try:
-                    notify_post(cfg, post, matches)
-                except NotifyError as e:
-                    # Leave the post unseen so the next poll tries again.
-                    errors.append(f"{post.id}: {e}")
-                    say(f"Couldn't notify about {post.title!r}: {e}")
-                    continue
-                for m in matches:
-                    db.record_match(conn, post, m, notified=True)
-                say(f"Notified: {post.title}  ({summary})")
+            try:
+                notify_post(cfg, post, matches)
+            except NotifyError as e:
+                # Leave the post unseen so the next poll tries again.
+                errors.append(f"{post.id}: {e}")
+                say(f"Couldn't notify about {post.title!r}: {e}")
+                continue
+            for m in matches:
+                db.record_match(conn, post, m, notified=True)
+            say(f"Notified: {post.title}  ({summary})")
         done.append(post.id)
 
-    if not dry_run:
-        db.mark_seen(conn, done)
-        db.log_poll(
-            conn,
-            "error" if errors else "ok",
-            n_posts=len(posts),
-            n_new=len(new_posts),
-            error="\n".join(errors) or None,
-        )
+    db.mark_seen(conn, done)
+    db.log_poll(
+        conn,
+        "error" if errors else "ok",
+        n_posts=len(posts),
+        n_new=len(new_posts),
+        error="\n".join(errors) or None,
+    )
     say(f"Checked {len(posts)} posts: {len(new_posts)} new, {n_matched} matched.")
 
 
@@ -98,35 +90,31 @@ def next_wait(cfg: Config, failures: int, retry_after: float | None = None) -> f
     return min(wait, MAX_WAIT_SECONDS)
 
 
-def run_forever(cfg: Config, conn, dry_run: bool) -> None:
+def run_forever(cfg: Config, conn) -> None:
     say(
-        f"Watching r/{cfg.subreddit} every {cfg.poll_interval_minutes:g} minutes"
-        f"{' (dry run)' if dry_run else ''}. Press Ctrl-C to stop."
+        f"Watching r/{cfg.subreddit} every {cfg.poll_interval_minutes:g} minutes."
+        " Press Ctrl-C to stop."
     )
-    dry_seen: set[str] | None = set() if dry_run else None
     failures = 0
     while True:
         retry_after = None
         try:
-            poll_once(cfg, conn, dry_run, dry_seen)
+            poll_once(cfg, conn)
             failures = 0
         except RateLimited as e:
             failures += 1
             retry_after = e.retry_after
             say(str(e))
-            if not dry_run:
-                db.log_poll(conn, "error", error=str(e))
+            db.log_poll(conn, "error", error=str(e))
         except FetchError as e:
             failures += 1
             say(f"Couldn't fetch the feed: {e}")
-            if not dry_run:
-                db.log_poll(conn, "error", error=str(e))
+            db.log_poll(conn, "error", error=str(e))
         except Exception:
             # A bug shouldn't stop the watcher for good; log it and keep going.
             failures += 1
             say("Unexpected error:\n" + traceback.format_exc())
-            if not dry_run:
-                db.log_poll(conn, "error", error=traceback.format_exc(limit=3))
+            db.log_poll(conn, "error", error=traceback.format_exc(limit=3))
 
         wait = next_wait(cfg, failures, retry_after)
         if failures:
@@ -137,9 +125,27 @@ def run_forever(cfg: Config, conn, dry_run: bool) -> None:
 # --- commands ----------------------------------------------------------------
 
 
+def check_recent(cfg: Config, conn) -> None:
+    """Dry run: match the watchlist against everything in the feed (about the
+    last 12 hours), seen or not. Prints only: never notifies or saves."""
+    posts = fetch_posts(cfg.feed_url, cfg.user_agent)
+    results = matching_posts(posts, db.list_watch_items(conn))
+    for post, matches in results:
+        summary = "; ".join(describe(m) for m in matches)
+        print(f"{db.localtime(post.published)}  {post.title}\n    {summary}\n    {post.url}")
+    since = db.localtime(posts[-1].published) if posts else "?"
+    print(
+        f"Checked {len(posts)} recent posts (since {since}): {len(results)} matched."
+        " Nothing was notified or saved."
+    )
+
+
 def cmd_poll(args, cfg, conn):
     try:
-        poll_once(cfg, conn, dry_run=args.dry_run)
+        if args.dry_run:
+            check_recent(cfg, conn)
+        else:
+            poll_once(cfg, conn)
     except FetchError as e:
         if not args.dry_run:
             db.log_poll(conn, "error", error=str(e))
@@ -148,7 +154,7 @@ def cmd_poll(args, cfg, conn):
 
 def cmd_run(args, cfg, conn):
     try:
-        run_forever(cfg, conn, dry_run=args.dry_run)
+        run_forever(cfg, conn)
     except KeyboardInterrupt:
         say("Stopped.")
 
@@ -180,6 +186,13 @@ def cmd_watch_remove(args, cfg, conn):
         print(f"Removed #{args.id}.")
     else:
         sys.exit(f"No watch item #{args.id}. See: reddit-notifier watch list")
+
+
+def cmd_web(args, cfg, conn):
+    from .web import serve  # imported here so other commands don't load Flask
+
+    conn.close()  # the web app opens its own connection for each page
+    serve(cfg, port=args.port)
 
 
 def cmd_test_notify(args, cfg, conn):
@@ -216,12 +229,20 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("poll", help="check the feed once")
-    p.add_argument("--dry-run", action="store_true", help="print matches; don't notify or save anything")
+    p.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="preview: show every recent post (~12 hours) that matches your watchlist;"
+        " don't notify or save anything",
+    )
     p.set_defaults(func=cmd_poll)
 
     p = sub.add_parser("run", help="keep checking the feed until stopped (Ctrl-C)")
-    p.add_argument("--dry-run", action="store_true", help="print matches; don't notify or save anything")
     p.set_defaults(func=cmd_run)
+
+    p = sub.add_parser("web", help="open the web UI (http://127.0.0.1:5050 by default)")
+    p.add_argument("--port", type=int, help="port to use instead of web_port in config.toml")
+    p.set_defaults(func=cmd_web)
 
     p = sub.add_parser("test-notify", help="send a test notification to your phone")
     p.set_defaults(func=cmd_test_notify)

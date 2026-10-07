@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Recent matches</h1>
+    <p class="subtitle">Watching r/{{ cfg.subreddit }} every {{ cfg.poll_interval_minutes | round | int }} minutes</p>
+  </div>
+</div>
+
+{% if poller_stale %}
+  <div class="flash flash-warning">
+    {% if last %}
+      The poller hasn't checked Reddit since {{ last.ran_at | localtime }}. It may not be running.
+    {% else %}
+      The poller hasn't run yet.
+    {% endif %}
+    Start it in a terminal with <code>uv run reddit-notifier run</code>.
+  </div>
+{% endif %}
+
+<div class="status-card">
+  {% if last %}
+    <strong>Last poll:</strong> {{ last.ran_at | timeago }}
+    <span class="time-muted">({{ last.ran_at | localtime }})</span>
+    <span class="badge badge-{{ last.status }}">{{ last.status }}</span>
+    {% if last.status != "error" %}
+      <span class="time-muted">· {{ last.n_new }} new of {{ last.n_posts }} posts</span>
+    {% endif %}
+    {% if last.error %}<p class="error-text">{{ last.error }}</p>{% endif %}
+  {% else %}
+    No polls yet.
+  {% endif %}
+</div>
+
+<div class="section-header" data-unread="{{ unread_count }}">
+  <h2>Matches{% if unread_count %} <span class="badge badge-new" id="unread-badge">{{ unread_count }} new</span>{% endif %}</h2>
+  {% if unread_count %}
+    <form method="post" action="{{ url_for('mark_all_read') }}" id="mark-all-form">
+      <button type="submit" class="btn btn-secondary btn-sm">Mark all read</button>
+    </form>
+  {% endif %}
+</div>
+{% if matches %}
+  <div class="table-scroll">
+  <table class="data-table">
+    <thead>
+      <tr><th>When</th><th>Item</th><th>Post</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for m in matches %}
+        <tr class="{{ 'unread' if not m.read_at }}" data-post-id="{{ m.post_id }}">
+          <td class="date-cell">{{ m.matched_at | localtime }}</td>
+          <td>{{ m.item_name }}</td>
+          <td>
+            {% if not m.read_at %}<span class="badge badge-new">New</span>{% endif %}
+            <a class="post-link" href="{{ url_for('open_post', post_id=m.post_id) }}" target="_blank" rel="noopener">{{ m.title }}</a>
+            {% set details = match_details(m) %}
+            {% if details %}<br><span class="time-muted">{{ details }}</span>{% endif %}
+          </td>
+          <td class="actions-cell">
+            {% if not m.read_at %}
+              <form method="post" action="{{ url_for('mark_read', post_id=m.post_id) }}">
+                <button type="submit" class="btn btn-link btn-sm">Mark read</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+{% else %}
+  <p class="empty-state">No matches yet. When a new post matches your watchlist, it shows up here and on your phone.</p>
+{% endif %}
+
+<h2>Poll history</h2>
+{% if polls %}
+  <div class="table-scroll">
+  <table class="data-table">
+    <thead>
+      <tr><th>When</th><th>Status</th><th>New posts</th><th>Error</th></tr>
+    </thead>
+    <tbody>
+      {% for p in polls %}
+        <tr>
+          <td class="date-cell">{{ p.ran_at | localtime }}</td>
+          <td><span class="badge badge-{{ p.status }}">{{ p.status }}</span></td>
+          <td>{% if p.status != "error" %}{{ p.n_new }}{% endif %}</td>
+          <td class="time-muted">{{ p.error or "" }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+{% else %}
+  <p class="empty-state">No polls yet.</p>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='matches.js') }}"></script>
+{% endblock %}

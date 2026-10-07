@@ -168,3 +168,13 @@ def match_post(post, items: list[WatchItem]) -> list[Match]:
         if m := match_item(item, post.title, post.body_text):
             matches.append(m)
     return matches
+
+
+def matching_posts(posts: list, items: list[WatchItem]) -> list[tuple]:
+    """(post, matches) for every post that matches at least one item,
+    in the same order as `posts`."""
+    results = []
+    for post in posts:
+        if matches := match_post(post, items):
+            results.append((post, matches))
+    return results
