@@ -150,6 +150,8 @@ h2 { font-size: 1.1rem; margin: 2rem 0 0.75rem; }
 .section-header { display: flex; align-items: baseline; gap: 1rem; }
 .section-header form { margin: 0; }
 tr.unread .post-link { font-weight: 600; }
+.more-link { margin: 0.75rem 0 2rem; }
+.pager { display: flex; justify-content: center; align-items: baseline; gap: 1.5rem; margin: 1rem 0 2rem; }
 
 /* ── Empty state ── */
 .empty-state { text-align: center; padding: 3rem; color: var(--muted); }

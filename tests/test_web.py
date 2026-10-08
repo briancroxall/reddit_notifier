@@ -127,6 +127,62 @@ def test_mark_all_read(client, conn):
     assert db.count_unread(conn) == 0
 
 
+def test_home_keeps_only_a_few_read_posts(cfg, conn):
+    cfg.read_matches_on_home = 2
+    client = create_app(cfg).test_client()
+    for n in range(4):
+        add_match(conn, f"t3_read{n}", f"Item{n}")
+        db.mark_read(conn, f"t3_read{n}")
+    add_match(conn, "t3_new", "Fresh")
+
+    html = page(client)
+    assert "t3_new" in html  # unread always shown
+    assert "t3_read3" in html and "t3_read2" in html  # the 2 read most recently
+    assert "t3_read1" not in html and "t3_read0" not in html
+    assert html.index("t3_new") < html.index("t3_read3")  # unread first
+    assert 'href="/history"' in html
+
+
+def test_home_read_limit_counts_posts_not_items(cfg, conn):
+    cfg.read_matches_on_home = 1
+    client = create_app(cfg).test_client()
+    add_match(conn, "t3_old", "Aventus")
+    add_match(conn, "t3_x", "Viride")
+    add_match(conn, "t3_x", "Orage")  # same post, second item
+    db.mark_all_read(conn)
+    html = page(client)
+    assert "[WTS] Viride" in html and "[WTS] Orage" in html
+    assert "t3_old" not in html
+
+
+def test_history_shows_read_and_unread(client, conn):
+    add_match(conn, "t3_x")
+    add_match(conn, "t3_y", "Orage")
+    db.mark_read(conn, "t3_x")
+    html = page(client, "/history")
+    assert "t3_x" in html and "t3_y" in html
+    assert "2 in all" in html
+
+
+def test_history_pages(client, conn, monkeypatch):
+    monkeypatch.setattr(web, "MATCHES_PER_PAGE", 2)
+    for n in range(5):
+        add_match(conn, f"t3_p{n}", f"Item{n}")
+    first = page(client, "/history")
+    assert "t3_p4" in first and "t3_p2" not in first
+    assert "Page 1 of 3" in first and "?page=2" in first
+    last = page(client, "/history?page=99")  # past the end shows the last page
+    assert "t3_p0" in last and "Page 3 of 3" in last
+
+
+def test_mark_read_returns_to_the_page_it_was_on(client, conn):
+    add_match(conn)
+    response = client.post("/posts/t3_x/read", data={"next": "/history?page=2"})
+    assert response.location == "/history?page=2"
+    response = client.post("/posts/t3_x/read", data={"next": "//evil.example"})
+    assert response.location == "/"
+
+
 def test_match_details_mirrors_notification_text():
     row = {"item_name": "Viride", "term": "Vi ride", "matched_text": "vi ride", "fuzzy": 0, "where_found": "title"}
     assert match_details(row) == 'as "Vi ride"'

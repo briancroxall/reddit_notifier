@@ -11,6 +11,7 @@
     <a class="nav-brand" href="{{ url_for('home') }}">Reddit Notifier</a>
     <ul class="nav-links">
       <li><a href="{{ url_for('home') }}">Matches<span id="nav-unread">{% if unread_count %} ({{ unread_count }}){% endif %}</span></a></li>
+      <li><a href="{{ url_for('history') }}">Past matches</a></li>
       <li><a href="{{ url_for('watchlist') }}">Watchlist</a></li>
       <li>
         <form method="post" action="{{ url_for('check_all') }}">

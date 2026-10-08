@@ -23,6 +23,10 @@ timezone = ""
 # Change it if another program is already using this port.
 web_port = 5050
 
+# The web UI's home page shows every unread match plus this many posts you've
+# already read. All matches, read or not, are on its "Past matches" page.
+read_matches_on_home = 5
+
 # If polling keeps failing (Reddit refusing, no internet...) for this many
 # minutes, send one alert to your phone, and another when it works again.
 alert_after_minutes = 60

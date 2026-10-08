@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block title %}Past matches · Reddit Notifier{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Past matches</h1>
+    <p class="subtitle">Every match, read or not, newest first{% if total %} · {{ total }} in all{% endif %}</p>
+  </div>
+</div>
+
+{% set heading = "Matches" %}
+{% set empty_message = "No matches yet." %}
+{% include "_matches.html" %}
+
+{% if pages > 1 %}
+  <nav class="pager">
+    {% if page > 1 %}<a href="{{ url_for('history', page=page - 1) }}">&larr; Newer</a>{% endif %}
+    <span class="time-muted">Page {{ page }} of {{ pages }}</span>
+    {% if page < pages %}<a href="{{ url_for('history', page=page + 1) }}">Older &rarr;</a>{% endif %}
+  </nav>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='matches.js') }}"></script>
+{% endblock %}

@@ -33,45 +33,11 @@
   {% endif %}
 </div>
 
-<div class="section-header" data-unread="{{ unread_count }}">
-  <h2>Matches{% if unread_count %} <span class="badge badge-new" id="unread-badge">{{ unread_count }} new</span>{% endif %}</h2>
-  {% if unread_count %}
-    <form method="post" action="{{ url_for('mark_all_read') }}" id="mark-all-form">
-      <button type="submit" class="btn btn-secondary btn-sm">Mark all read</button>
-    </form>
-  {% endif %}
-</div>
-{% if matches %}
-  <div class="table-scroll">
-  <table class="data-table">
-    <thead>
-      <tr><th>When</th><th>Item</th><th>Post</th><th></th></tr>
-    </thead>
-    <tbody>
-      {% for m in matches %}
-        <tr class="{{ 'unread' if not m.read_at }}" data-post-id="{{ m.post_id }}">
-          <td class="date-cell">{{ m.matched_at | localtime }}</td>
-          <td>{{ m.item_name }}</td>
-          <td>
-            {% if not m.read_at %}<span class="badge badge-new">New</span>{% endif %}
-            <a class="post-link" href="{{ url_for('open_post', post_id=m.post_id) }}" target="_blank" rel="noopener">{{ m.title }}</a>
-            {% set details = match_details(m) %}
-            {% if details %}<br><span class="time-muted">{{ details }}</span>{% endif %}
-          </td>
-          <td class="actions-cell">
-            {% if not m.read_at %}
-              <form method="post" action="{{ url_for('mark_read', post_id=m.post_id) }}">
-                <button type="submit" class="btn btn-link btn-sm">Mark read</button>
-              </form>
-            {% endif %}
-          </td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  </div>
-{% else %}
-  <p class="empty-state">No matches yet. When a new post matches your watchlist, it shows up here and on your phone.</p>
+{% set heading = "Matches" %}
+{% set empty_message = "No matches yet. When a new post matches your watchlist, it shows up here and on your phone." %}
+{% include "_matches.html" %}
+{% if has_matches %}
+  <p class="more-link"><a href="{{ url_for('history') }}">See all past matches &rarr;</a></p>
 {% endif %}
 
 <h2>Poll history</h2>

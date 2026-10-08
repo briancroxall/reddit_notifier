@@ -224,9 +224,28 @@ def record_match(conn: sqlite3.Connection, post, match: Match, notified: bool) -
         )
 
 
-def recent_matches(conn: sqlite3.Connection, limit: int = 50) -> list[sqlite3.Row]:
+def recent_matches(
+    conn: sqlite3.Connection, limit: int = 50, offset: int = 0
+) -> list[sqlite3.Row]:
     return conn.execute(
-        "SELECT * FROM matches ORDER BY matched_at DESC, id DESC LIMIT ?", (limit,)
+        "SELECT * FROM matches ORDER BY matched_at DESC, id DESC LIMIT ? OFFSET ?",
+        (limit, offset),
+    ).fetchall()
+
+
+def count_matches(conn: sqlite3.Connection) -> int:
+    return conn.execute("SELECT COUNT(*) FROM matches").fetchone()[0]
+
+
+def unread_and_recent_read(conn: sqlite3.Connection, read_posts: int = 5) -> list[sqlite3.Row]:
+    """Every unread match, then the matches for the `read_posts` posts read
+    most recently. Counted by post, since a post can match several items."""
+    return conn.execute(
+        "SELECT * FROM matches WHERE read_at IS NULL OR post_id IN ("
+        "  SELECT post_id FROM matches WHERE read_at IS NOT NULL"
+        "  GROUP BY post_id ORDER BY MAX(read_at) DESC, MAX(id) DESC LIMIT ?"
+        ") ORDER BY read_at IS NOT NULL, matched_at DESC, id DESC",
+        (read_posts,),
     ).fetchall()
 
 

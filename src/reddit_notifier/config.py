@@ -32,6 +32,9 @@ class Config:
     # Time zone for times shown in the web UI and logs, e.g. "America/Chicago".
     # Empty means this computer's own time zone.
     timezone: str = ""
+    # How many already-read posts to keep on the home page, below the unread
+    # ones. The rest are on the "Past matches" page.
+    read_matches_on_home: int = 5
 
     @property
     def feed_url(self) -> str:
@@ -83,4 +86,5 @@ def load_config(path: Path = DEFAULT_PATH) -> Config:
         server_ssh=data.get("server", {}).get("ssh", ""),
         tunnel_port=int(data.get("server", {}).get("tunnel_port", 5051)),
         timezone=timezone,
+        read_matches_on_home=max(int(data.get("read_matches_on_home", 5)), 0),
     )

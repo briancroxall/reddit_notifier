@@ -1,0 +1,46 @@
+{# The matches table, shared by the home page and Past matches. Set `heading`
+   and `empty_message` before including it. `next` sends "Mark read" back to
+   whichever page the button was on. #}
+{% set next = request.full_path.rstrip("?") %}
+<div class="section-header" data-unread="{{ unread_count }}">
+  <h2>{{ heading }}{% if unread_count %} <span class="badge badge-new" id="unread-badge">{{ unread_count }} new</span>{% endif %}</h2>
+  {% if unread_count %}
+    <form method="post" action="{{ url_for('mark_all_read') }}" id="mark-all-form">
+      <input type="hidden" name="next" value="{{ next }}">
+      <button type="submit" class="btn btn-secondary btn-sm">Mark all read</button>
+    </form>
+  {% endif %}
+</div>
+{% if matches %}
+  <div class="table-scroll">
+  <table class="data-table">
+    <thead>
+      <tr><th>When</th><th>Item</th><th>Post</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for m in matches %}
+        <tr class="{{ 'unread' if not m.read_at }}" data-post-id="{{ m.post_id }}">
+          <td class="date-cell">{{ m.matched_at | localtime }}</td>
+          <td>{{ m.item_name }}</td>
+          <td>
+            {% if not m.read_at %}<span class="badge badge-new">New</span>{% endif %}
+            <a class="post-link" href="{{ url_for('open_post', post_id=m.post_id) }}" target="_blank" rel="noopener">{{ m.title }}</a>
+            {% set details = match_details(m) %}
+            {% if details %}<br><span class="time-muted">{{ details }}</span>{% endif %}
+          </td>
+          <td class="actions-cell">
+            {% if not m.read_at %}
+              <form method="post" action="{{ url_for('mark_read', post_id=m.post_id) }}">
+                <input type="hidden" name="next" value="{{ next }}">
+                <button type="submit" class="btn btn-link btn-sm">Mark read</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+{% else %}
+  <p class="empty-state">{{ empty_message }}</p>
+{% endif %}

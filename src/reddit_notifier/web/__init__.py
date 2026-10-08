@@ -29,6 +29,7 @@ from ..matcher import Match, WatchItem, matching_posts
 from ..notify import describe
 
 HOST = "127.0.0.1"
+MATCHES_PER_PAGE = 50
 # Reuse a fetched feed this long, so clicking "Check recent" on several items
 # in a row costs Reddit one request instead of several.
 FEED_CACHE_MINUTES = 5
@@ -101,8 +102,25 @@ def create_app(cfg: Config) -> Flask:
             last=last,
             poller_stale=is_stale(last, cfg),
             polls=db.recent_polls(conn, limit=10),
-            matches=db.recent_matches(conn, limit=50),
+            matches=db.unread_and_recent_read(conn, read_posts=cfg.read_matches_on_home),
+            has_matches=db.count_matches(conn) > 0,
             cfg=cfg,
+        )
+
+    @app.get("/history")
+    def history():
+        conn = get_conn()
+        total = db.count_matches(conn)
+        pages = max(1, -(-total // MATCHES_PER_PAGE))  # rounded up
+        page = min(max(request.args.get("page", 1, type=int), 1), pages)
+        return render_template(
+            "history.html",
+            matches=db.recent_matches(
+                conn, limit=MATCHES_PER_PAGE, offset=(page - 1) * MATCHES_PER_PAGE
+            ),
+            page=page,
+            pages=pages,
+            total=total,
         )
 
     @app.get("/posts/<post_id>/open")
@@ -118,13 +136,13 @@ def create_app(cfg: Config) -> Flask:
     @app.post("/posts/<post_id>/read")
     def mark_read(post_id):
         db.mark_read(get_conn(), post_id)
-        return redirect(url_for("home"))
+        return redirect(back_to())
 
     @app.post("/matches/read-all")
     def mark_all_read():
         if db.mark_all_read(get_conn()):
             flash("Marked all matches as read.", "success")
-        return redirect(url_for("home"))
+        return redirect(back_to())
 
     # --- watchlist -----------------------------------------------------------
 
@@ -225,6 +243,16 @@ def item_from_form(form, item_id: int | None = None) -> tuple[WatchItem, list[st
             "A phrase can't be both matched and excluded: " + ", ".join(sorted(overlap)) + "."
         )
     return item, errors
+
+
+def back_to() -> str:
+    """The page a form came from (its hidden "next" field), so marking a
+    match read on Past matches stays there. Only our own pages, never
+    another site."""
+    target = request.form.get("next", "")
+    if target.startswith("/") and not target.startswith(("//", "/\\")):
+        return target
+    return url_for("home")
 
 
 def get_conn():
