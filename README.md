@@ -168,11 +168,25 @@ a Raspberry Pi. The watcher and web UI run as systemd services, and the web
 UI stays private to the server: from your own computer, run
 
 ```sh
-uv run reddit-notifier tunnel
+uv run reddit-notifier tunnel start
 ```
 
-and open <http://127.0.0.1:5051> while it runs. It connects over SSH to the
-server named in the `[server]` section of `config.toml`.
+and the server's web UI stays available at <http://127.0.0.1:5051>. The
+tunnel runs in the background over SSH to the server named in the `[server]`
+section of `config.toml`, starts at every login, and reconnects by itself
+after sleep or network changes. It needs an SSH key that works without
+typing a passphrase.
+
+| Command | What it does |
+|---|---|
+| `tunnel start` | Keep the tunnel open in the background, now and at every login |
+| `tunnel stop` | Close it; it stays off until `start` |
+| `tunnel status` | Is it running, and is the web UI reachable? |
+| `tunnel logs` | Recent log lines |
+| `tunnel` | Open it in this terminal instead, until Ctrl-C |
+
+When `[server]` is set, `service start` on the Mac refuses to run a second
+watcher unless you add `--here`, e.g. after moving back from the server.
 
 ## Configuration
 

@@ -6,6 +6,9 @@ to run them. launchd then starts them again at every login and restarts them
 if they crash. `service stop` stops them and removes those files, so nothing
 starts again until the next `service start`.
 
+`reddit-notifier tunnel start` does the same for an SSH tunnel to a server
+running the notifier, so its web UI is always at http://127.0.0.1:5051.
+
 On Linux (a server or a Raspberry Pi), use the systemd files in deploy/ instead.
 """
 
@@ -17,6 +20,7 @@ import socket
 import subprocess
 import sys
 import time
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -34,8 +38,8 @@ class ServiceError(Exception):
 
 @dataclass
 class Job:
-    name: str  # "poller" or "web"
-    command: str  # the reddit-notifier subcommand it runs
+    name: str  # "poller", "web", or "tunnel"
+    command: str = ""  # the reddit-notifier subcommand it runs, if any
 
     @property
     def label(self) -> str:
@@ -51,6 +55,8 @@ class Job:
 
 
 JOBS = [Job("poller", "run"), Job("web", "web")]
+TUNNEL = Job("tunnel")
+SSH = "/usr/bin/ssh"
 
 
 def launchd_domain() -> str:
@@ -61,26 +67,45 @@ def launchctl(*args: str) -> subprocess.CompletedProcess:
     return subprocess.run(["launchctl", *args], capture_output=True, text=True)
 
 
-def plist_for(job: Job, uv: str, project_dir: Path, config_path: Path) -> dict:
-    """The LaunchAgent settings for one job."""
+def launch_agent(job: Job, program_args: list[str], working_dir: Path, path_env: str) -> dict:
+    """LaunchAgent settings shared by every job."""
     return {
         "Label": job.label,
-        "ProgramArguments": [
-            uv, "run", "--project", str(project_dir),
-            "reddit-notifier", "--config", str(config_path), job.command,
-        ],
-        "WorkingDirectory": str(project_dir),
-        # launchd starts programs with a bare-bones PATH; give uv its folder.
-        "EnvironmentVariables": {
-            "PATH": f"{Path(uv).parent}:/usr/bin:/bin:/usr/sbin:/sbin",
-            "PYTHONUNBUFFERED": "1",
-        },
+        "ProgramArguments": program_args,
+        "WorkingDirectory": str(working_dir),
+        # launchd starts programs with a bare-bones PATH.
+        "EnvironmentVariables": {"PATH": path_env, "PYTHONUNBUFFERED": "1"},
         "RunAtLoad": True,  # start at login
         "KeepAlive": True,  # restart if it stops
         "ThrottleInterval": 60,  # but at most once a minute, if it keeps failing
         "StandardOutPath": str(job.log_path),
         "StandardErrorPath": str(job.log_path),
     }
+
+
+def plist_for(job: Job, uv: str, project_dir: Path, config_path: Path) -> dict:
+    """The LaunchAgent settings for the poller or web UI."""
+    args = [
+        uv, "run", "--project", str(project_dir),
+        "reddit-notifier", "--config", str(config_path), job.command,
+    ]
+    return launch_agent(job, args, project_dir, f"{Path(uv).parent}:/usr/bin:/bin:/usr/sbin:/sbin")
+
+
+def tunnel_command(cfg: Config, background: bool = False) -> list[str]:
+    """ssh command that makes the server's web UI appear on this computer."""
+    cmd = [
+        SSH, "-N",  # -N: forward the port only; don't open a shell
+        "-L", f"{cfg.tunnel_port}:127.0.0.1:{cfg.web_port}",
+        "-o", "ExitOnForwardFailure=yes",  # fail loudly if the local port is taken
+        # Check the connection every 30s; give up after 3 misses (e.g. after
+        # sleep or a Wi-Fi change) so a fresh connection can be made.
+        "-o", "ServerAliveInterval=30",
+        "-o", "ServerAliveCountMax=3",
+    ]
+    if background:
+        cmd += ["-o", "BatchMode=yes"]  # never wait for a password prompt nobody will see
+    return cmd + [cfg.server_ssh]
 
 
 # --- checks before starting -------------------------------------------------
@@ -131,10 +156,35 @@ def unload(job: Job) -> None:
         launchctl("bootout", f"{launchd_domain()}/{job.label}")
 
 
-def start(cfg: Config, config_path: Path) -> list[str]:
+def install(job: Job, plist: dict) -> None:
+    LAUNCH_AGENTS.mkdir(parents=True, exist_ok=True)
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    with job.plist_path.open("wb") as f:
+        plistlib.dump(plist, f)
+    result = launchctl("bootstrap", launchd_domain(), str(job.plist_path))
+    if result.returncode != 0:
+        raise ServiceError(f"launchd wouldn't start the {job.name}: {result.stderr.strip()}")
+
+
+def remove(job: Job) -> str:
+    """Stop a job and delete its LaunchAgent, so it doesn't start at login."""
+    was_loaded = is_loaded(job)
+    unload(job)
+    job.plist_path.unlink(missing_ok=True)
+    return f"Stopped the {job.name}." if was_loaded else f"The {job.name} wasn't running."
+
+
+def start(cfg: Config, config_path: Path, here: bool = False) -> list[str]:
     """Install and start both jobs (restarting them if already running).
     Returns lines to show the user."""
     require_macos()
+    if cfg.server_ssh and not here:
+        raise ServiceError(
+            f"config.toml says the notifier runs on a server ({cfg.server_ssh}).\n"
+            "Running it here too would check Reddit twice and could send duplicate alerts.\n"
+            "If you've stopped it on the server, start it here with:\n"
+            "  reddit-notifier service start --here"
+        )
     uv = shutil.which("uv")
     if uv is None:
         raise ServiceError("Couldn't find uv on your PATH.")
@@ -154,15 +204,9 @@ def start(cfg: Config, config_path: Path) -> list[str]:
             " Stop it, or set web_port in config.toml."
         )
 
-    LAUNCH_AGENTS.mkdir(parents=True, exist_ok=True)
-    LOG_DIR.mkdir(parents=True, exist_ok=True)
     lines = []
     for job in JOBS:
-        with job.plist_path.open("wb") as f:
-            plistlib.dump(plist_for(job, uv, project_dir, config_path), f)
-        result = launchctl("bootstrap", launchd_domain(), str(job.plist_path))
-        if result.returncode != 0:
-            raise ServiceError(f"launchd wouldn't start the {job.name}: {result.stderr.strip()}")
+        install(job, plist_for(job, uv, project_dir, config_path))
         lines.append(f"Started the {job.name}.")
     lines.append(f"Web UI: http://127.0.0.1:{cfg.web_port}  ·  Logs: {LOG_DIR}")
     lines.append("They'll start again at every login until you run: reddit-notifier service stop")
@@ -171,12 +215,7 @@ def start(cfg: Config, config_path: Path) -> list[str]:
 
 def stop() -> list[str]:
     require_macos()
-    lines = []
-    for job in JOBS:
-        was_loaded = is_loaded(job)
-        unload(job)
-        job.plist_path.unlink(missing_ok=True)
-        lines.append(f"Stopped the {job.name}." if was_loaded else f"The {job.name} wasn't running.")
+    lines = [remove(job) for job in JOBS]
     lines.append("They won't start again until you run: reddit-notifier service start")
     return lines
 
@@ -184,7 +223,7 @@ def stop() -> list[str]:
 def job_state(job: Job) -> str:
     result = launchctl("print", f"{launchd_domain()}/{job.label}")
     if result.returncode != 0:
-        return "not running (service stopped)"
+        return "not running (stopped)"
     pid = re.search(r"\bpid = (\d+)", result.stdout)
     if pid:
         return f"running (process {pid.group(1)})"
@@ -208,12 +247,72 @@ def status(cfg: Config, conn) -> list[str]:
     return lines
 
 
-def logs(n: int = 20) -> list[str]:
+def logs(n: int = 20, jobs: list[Job] = JOBS) -> list[str]:
     lines = []
-    for job in JOBS:
+    for job in jobs:
         lines.append(f"==> {job.log_path} <==")
         if job.log_path.exists():
             lines.extend(job.log_path.read_text(errors="replace").splitlines()[-n:])
         else:
             lines.append("(no log yet)")
+    return lines
+
+
+# --- tunnel to a server --------------------------------------------------------
+
+
+def require_server(cfg: Config) -> None:
+    if not cfg.server_ssh:
+        raise ServiceError(
+            "Set the server in config.toml first, e.g.:\n"
+            "  [server]\n"
+            '  ssh = "root@your-server.example.com"'
+        )
+
+
+def tunnel_start(cfg: Config, config_path: Path) -> list[str]:
+    require_macos()
+    require_server(cfg)
+    unload(TUNNEL)  # restart if already running
+    if port_in_use(cfg.tunnel_port):
+        raise ServiceError(
+            f"Port {cfg.tunnel_port} is in use, maybe by a `reddit-notifier tunnel`"
+            " open in a terminal. Close that (Ctrl-C) and try again."
+        )
+    install(TUNNEL, launch_agent(
+        TUNNEL, tunnel_command(cfg, background=True), config_path.resolve().parent,
+        "/usr/bin:/bin:/usr/sbin:/sbin",
+    ))
+    return [
+        f"Started the tunnel to {cfg.server_ssh}.",
+        f"The server's web UI: http://127.0.0.1:{cfg.tunnel_port}"
+        " (allow a few seconds to connect).",
+        "It reconnects by itself after sleep or network changes, and starts again at"
+        " every login until you run: reddit-notifier tunnel stop",
+    ]
+
+
+def tunnel_stop() -> list[str]:
+    require_macos()
+    return [remove(TUNNEL), "It won't start again until you run: reddit-notifier tunnel start"]
+
+
+def web_ui_reachable(port: int) -> bool:
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/", timeout=5) as response:
+            return response.status == 200
+    except OSError:
+        return False
+
+
+def tunnel_status(cfg: Config) -> list[str]:
+    require_macos()
+    lines = [f"tunnel  {job_state(TUNNEL)}"]
+    if web_ui_reachable(cfg.tunnel_port):
+        lines.append(f"The server's web UI is reachable at http://127.0.0.1:{cfg.tunnel_port}")
+    else:
+        lines.append(
+            f"The server's web UI isn't reachable at http://127.0.0.1:{cfg.tunnel_port} right now."
+            " If the tunnel is running, it may be reconnecting; see: reddit-notifier tunnel logs"
+        )
     return lines

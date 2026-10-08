@@ -264,7 +264,7 @@ def cmd_service(args, cfg, conn):
 
     try:
         if args.action in ("start", "restart"):
-            lines = service.start(cfg, args.config)
+            lines = service.start(cfg, args.config, here=args.here)
         elif args.action == "stop":
             lines = service.stop()
         elif args.action == "status":
@@ -276,31 +276,37 @@ def cmd_service(args, cfg, conn):
     print("\n".join(lines))
 
 
-def tunnel_command(cfg: Config) -> list[str]:
-    return [
-        "ssh", "-N",  # -N: forward the port only; don't open a shell
-        "-L", f"{cfg.tunnel_port}:127.0.0.1:{cfg.web_port}",
-        "-o", "ExitOnForwardFailure=yes",  # fail loudly if the local port is taken
-        "-o", "ServerAliveInterval=60",  # keep a quiet connection from dropping
-        cfg.server_ssh,
-    ]
-
-
 def cmd_tunnel(args, cfg, conn):
-    if not cfg.server_ssh:
-        sys.exit(
-            "Set the server in config.toml first, e.g.:\n"
-            "  [server]\n"
-            '  ssh = "root@your-server.example.com"'
-        )
+    from . import service
+
     conn.close()
+    try:
+        if args.action == "start":
+            print("\n".join(service.tunnel_start(cfg, args.config)))
+        elif args.action == "stop":
+            print("\n".join(service.tunnel_stop()))
+        elif args.action == "status":
+            print("\n".join(service.tunnel_status(cfg)))
+        elif args.action == "logs":
+            print("\n".join(service.logs(args.lines, jobs=[service.TUNNEL])))
+        else:
+            run_tunnel_here(cfg)
+    except service.ServiceError as e:
+        sys.exit(str(e))
+
+
+def run_tunnel_here(cfg: Config) -> None:
+    """Keep the tunnel open in this terminal until Ctrl-C."""
+    from . import service
+
+    service.require_server(cfg)
     print(
         f"Connecting to {cfg.server_ssh}...\n"
         f"While this runs, the server's web UI is at http://127.0.0.1:{cfg.tunnel_port}\n"
         "Press Ctrl-C to close the tunnel."
     )
     try:
-        result = subprocess.run(tunnel_command(cfg))
+        result = subprocess.run(service.tunnel_command(cfg))
     except KeyboardInterrupt:
         print("\nTunnel closed.")
         return
@@ -368,9 +374,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("action", choices=["start", "stop", "restart", "status", "logs"])
     p.add_argument("-n", "--lines", type=int, default=20, help="with logs: lines per log")
+    p.add_argument(
+        "--here",
+        action="store_true",
+        help="with start: run on this Mac even though config.toml names a [server]",
+    )
     p.set_defaults(func=cmd_service)
 
-    p = sub.add_parser("tunnel", help="show the server's web UI on this computer (via ssh)")
+    p = sub.add_parser(
+        "tunnel",
+        help="show the server's web UI on this computer (via ssh)",
+        description="Make the server's web UI appear at http://127.0.0.1:<tunnel_port>."
+        " With no action: keep it open in this terminal until Ctrl-C."
+        " start: keep it open in the background, now and at every login."
+        " stop: close it, and don't start again until `start`."
+        " status: is it running and is the web UI reachable."
+        " logs: show recent log lines.",
+    )
+    p.add_argument("action", nargs="?", choices=["start", "stop", "status", "logs"])
+    p.add_argument("-n", "--lines", type=int, default=20, help="with logs: lines to show")
     p.set_defaults(func=cmd_tunnel)
 
     p = sub.add_parser("test-notify", help="send a test notification to your phone")

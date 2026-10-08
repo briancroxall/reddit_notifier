@@ -107,8 +107,8 @@ def test_stop_removes_jobs_so_they_stay_stopped(cfg, fake_mac, tmp_path):
 def test_status(cfg, fake_mac, tmp_path):
     conn = db.connect(cfg.db_path)
     assert service.status(cfg, conn)[:3] == [
-        "poller  not running (service stopped)",
-        "web     not running (service stopped)",
+        "poller  not running (stopped)",
+        "web     not running (stopped)",
         "Last poll: none yet",
     ]
 
@@ -152,3 +152,73 @@ def test_requires_macos(monkeypatch):
     monkeypatch.setattr(service.sys, "platform", "linux")
     with pytest.raises(service.ServiceError, match="systemd"):
         service.stop()
+
+
+
+# --- guard against running on the Mac and a server at once ---------------------
+
+
+def test_start_refuses_when_config_names_a_server(cfg, fake_mac, tmp_path):
+    cfg.server_ssh = "root@example.com"
+    with pytest.raises(service.ServiceError, match="service start --here"):
+        service.start(cfg, tmp_path / "config.toml")
+    assert "bootstrap" not in commands(fake_mac)
+
+    service.start(cfg, tmp_path / "config.toml", here=True)  # deliberate override
+    assert commands(fake_mac) == ["bootstrap", "bootstrap"]
+
+
+# --- tunnel ------------------------------------------------------------------
+
+
+def test_tunnel_command():
+    cfg = Config("x", 10, "ua", Path("db"), "s", "t", server_ssh="root@example.com")
+    cmd = service.tunnel_command(cfg)
+    assert cmd[:4] == ["/usr/bin/ssh", "-N", "-L", "5051:127.0.0.1:5050"]
+    assert cmd[-1] == "root@example.com"
+    assert "BatchMode=yes" not in cmd
+    assert "BatchMode=yes" in service.tunnel_command(cfg, background=True)
+
+
+def test_tunnel_start_installs_ssh_job(cfg, fake_mac, tmp_path):
+    cfg.server_ssh = "root@example.com"
+    lines = service.tunnel_start(cfg, tmp_path / "config.toml")
+    plist = plistlib.loads((tmp_path / "LaunchAgents" / "local.reddit-notifier.tunnel.plist").read_bytes())
+    assert plist["ProgramArguments"] == service.tunnel_command(cfg, background=True)
+    assert plist["KeepAlive"] is True and plist["RunAtLoad"] is True
+    assert plist["StandardOutPath"].endswith("/tunnel.log")
+    assert "http://127.0.0.1:5051" in lines[1]
+    # Only the tunnel: starting it must not start a local poller.
+    assert list(fake_mac.loaded) == ["local.reddit-notifier.tunnel"]
+
+
+def test_tunnel_start_needs_server(cfg, fake_mac, tmp_path):
+    with pytest.raises(service.ServiceError, match="Set the server in config.toml"):
+        service.tunnel_start(cfg, tmp_path / "config.toml")
+
+
+def test_tunnel_start_refuses_when_port_busy(cfg, fake_mac, tmp_path):
+    cfg.server_ssh = "root@example.com"
+    fake_mac.port_busy = True
+    with pytest.raises(service.ServiceError, match="Port 5051 is in use"):
+        service.tunnel_start(cfg, tmp_path / "config.toml")
+
+
+def test_tunnel_stop(cfg, fake_mac, tmp_path):
+    cfg.server_ssh = "root@example.com"
+    service.tunnel_start(cfg, tmp_path / "config.toml")
+    assert service.tunnel_stop()[0] == "Stopped the tunnel."
+    assert fake_mac.loaded == {}
+    assert not (tmp_path / "LaunchAgents" / "local.reddit-notifier.tunnel.plist").exists()
+
+
+def test_tunnel_status(cfg, fake_mac, tmp_path, monkeypatch):
+    cfg.server_ssh = "root@example.com"
+    service.tunnel_start(cfg, tmp_path / "config.toml")
+    monkeypatch.setattr(service, "web_ui_reachable", lambda port: True)
+    assert service.tunnel_status(cfg) == [
+        "tunnel  running (process 4242)",
+        "The server's web UI is reachable at http://127.0.0.1:5051",
+    ]
+    monkeypatch.setattr(service, "web_ui_reachable", lambda port: False)
+    assert "isn't reachable" in service.tunnel_status(cfg)[1]

@@ -178,11 +178,20 @@ free -h
 On the Mac:
 
 ```sh
-uv run reddit-notifier tunnel
+uv run reddit-notifier tunnel start
 ```
 
-While it runs, open <http://127.0.0.1:5051>. That's the server's web UI,
-with your history copied from the Mac. Press Ctrl-C to close the tunnel.
+Then open <http://127.0.0.1:5051>. That's the server's web UI, with your
+history copied from the Mac. The tunnel keeps running in the background,
+starts at every login, and reconnects after sleep or Wi-Fi changes; check it
+with `uv run reddit-notifier tunnel status`. To use it only now and then
+instead, run `uv run reddit-notifier tunnel` (no `start`) and press Ctrl-C to
+close it.
+
+The background tunnel can't type an SSH passphrase. If `tunnel status` keeps
+showing it as not reachable, check `uv run reddit-notifier tunnel logs` for
+"Permission denied", which means your SSH key needs a passphrase; store it in
+the macOS Keychain with `ssh-add --apple-use-keychain ~/.ssh/id_ed25519`.
 (Port 5051 keeps it separate from 5050, which the Mac's own service uses if
 you ever run it.)
 
@@ -190,7 +199,7 @@ you ever run it.)
 
 | Task | Where | Command |
 |---|---|---|
-| See the web UI | Mac | `uv run reddit-notifier tunnel`, then <http://127.0.0.1:5051> |
+| See the web UI | Mac | <http://127.0.0.1:5051> (after `uv run reddit-notifier tunnel start` once) |
 | Is it running? | server | `systemctl status reddit-notifier` |
 | Recent log lines | server | `journalctl -u reddit-notifier -n 30` |
 | Stop both | server | `systemctl stop reddit-notifier reddit-notifier-web` |
@@ -219,9 +228,13 @@ systemctl disable --now reddit-notifier reddit-notifier-web
 On the Mac, from the project folder:
 
 ```sh
+uv run reddit-notifier tunnel stop
 scp $SERVER:/opt/reddit-notifier/data/notifier.db data/
-uv run reddit-notifier service start
+uv run reddit-notifier service start --here
 ```
+
+`--here` confirms you mean to run it on the Mac even though `config.toml`
+still names the server. (Or delete the `[server]` section.)
 
 ## Troubleshooting
 
@@ -230,7 +243,8 @@ uv run reddit-notifier service start
   `bash /opt/reddit-notifier/deploy/update.sh`, which runs `uv sync`.
 - **Service keeps restarting:** read the error with
   `journalctl -u reddit-notifier -n 50`.
-- **`tunnel` says the port is in use:** another tunnel is already open, or
-  change `tunnel_port` under `[server]` in the Mac's `config.toml`.
+- **`tunnel` says the port is in use:** another tunnel is already open
+  (check `tunnel status`, or close one running in a terminal), or change
+  `tunnel_port` under `[server]` in the Mac's `config.toml`.
 - **Times in the web UI look off:** they use the server's time zone
   (`timedatectl` shows it).

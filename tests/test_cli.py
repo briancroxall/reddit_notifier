@@ -244,24 +244,20 @@ def test_run_forever_sends_trouble_and_recovery(cfg, conn, world, monkeypatch):
 # --- tunnel ------------------------------------------------------------------
 
 
-def test_tunnel_command(cfg):
-    cfg.server_ssh = "root@example.com"
-    cmd = cli.tunnel_command(cfg)
-    assert cmd[:4] == ["ssh", "-N", "-L", "5051:127.0.0.1:5050"]
-    assert cmd[-1] == "root@example.com"
-
-
 def test_tunnel_needs_server_setting(cfg, conn):
     args = cli.build_parser().parse_args(["tunnel"])
     with pytest.raises(SystemExit, match="Set the server in config.toml"):
         args.func(args, cfg, conn)
 
 
-def test_tunnel_runs_ssh(cfg, conn, monkeypatch, capsys):
+def test_tunnel_runs_ssh_in_the_foreground(cfg, conn, monkeypatch, capsys):
+    from reddit_notifier import service
+
     cfg.server_ssh = "root@example.com"
     ran = []
     monkeypatch.setattr(cli.subprocess, "run", lambda cmd: ran.append(cmd) or SimpleNamespace(returncode=0))
     args = cli.build_parser().parse_args(["tunnel"])
     args.func(args, cfg, conn)
-    assert ran == [cli.tunnel_command(cfg)]
+    assert ran == [service.tunnel_command(cfg)]
+    assert "BatchMode=yes" not in ran[0]  # in a terminal, ssh may ask questions
     assert "http://127.0.0.1:5051" in capsys.readouterr().out
