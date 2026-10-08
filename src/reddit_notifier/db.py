@@ -7,6 +7,7 @@ import json
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from .matcher import Match, WatchItem
 
@@ -58,11 +59,25 @@ def now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
+# Time zone for showing times to people. None means this computer's own time
+# zone, which on a server is often UTC; set `timezone` in config.toml to fix that.
+_display_tz: ZoneInfo | None = None
+
+
+def set_display_timezone(name: str | None) -> None:
+    global _display_tz
+    _display_tz = ZoneInfo(name) if name else None
+
+
+def local_now() -> datetime:
+    return datetime.now().astimezone(_display_tz)
+
+
 def localtime(iso: str | None) -> str:
-    """A stored (or feed) timestamp in this computer's time zone, e.g. "Oct 6, 2:02 PM"."""
+    """A stored (or feed) timestamp in the display time zone, e.g. "Oct 6, 2:02 PM"."""
     if not iso:
         return ""
-    return datetime.fromisoformat(iso).astimezone().strftime("%b %-d, %-I:%M %p")
+    return datetime.fromisoformat(iso).astimezone(_display_tz).strftime("%b %-d, %-I:%M %p")
 
 
 def connect(path: Path) -> sqlite3.Connection:

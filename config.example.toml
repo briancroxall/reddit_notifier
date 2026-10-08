@@ -14,6 +14,11 @@ user_agent = "python:reddit-notifier:v0.1 (by /u/parkaboy7)"
 # Where the SQLite database lives (relative to where you run the command).
 db_path = "data/notifier.db"
 
+# Time zone for times in the web UI and logs. Leave empty to use the
+# computer's own; set it when running on a server, which is often on UTC.
+# Names: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+timezone = ""
+
 # Port for the web UI (reddit-notifier web), at http://127.0.0.1:<port>.
 # Change it if another program is already using this port.
 web_port = 5050

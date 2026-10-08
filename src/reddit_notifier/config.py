@@ -3,6 +3,7 @@
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 DEFAULT_PATH = Path("config.toml")
 MIN_INTERVAL_MINUTES = 2
@@ -28,6 +29,9 @@ class Config:
     # [server] section: where the notifier runs remotely, for `tunnel`.
     server_ssh: str = ""  # e.g. "root@example.com"
     tunnel_port: int = 5051  # local port for the tunneled web UI
+    # Time zone for times shown in the web UI and logs, e.g. "America/Chicago".
+    # Empty means this computer's own time zone.
+    timezone: str = ""
 
     @property
     def feed_url(self) -> str:
@@ -50,6 +54,16 @@ def load_config(path: Path = DEFAULT_PATH) -> Config:
     if not topic or topic == "CHANGE-ME":
         raise ConfigError(f"Set [ntfy] topic in {path}.")
 
+    timezone = data.get("timezone", "")
+    if timezone:
+        try:
+            ZoneInfo(timezone)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ConfigError(
+                f"Unknown timezone {timezone!r} in {path}."
+                ' Use a name like "America/Chicago" or "America/Denver".'
+            ) from None
+
     interval = float(data.get("poll_interval_minutes", 10))
     # A relative db_path is relative to this config file, not to wherever the
     # command runs from. Background services don't start in the project folder.
@@ -68,4 +82,5 @@ def load_config(path: Path = DEFAULT_PATH) -> Config:
         custom_feed_url=data.get("feed_url", ""),
         server_ssh=data.get("server", {}).get("ssh", ""),
         tunnel_port=int(data.get("server", {}).get("tunnel_port", 5051)),
+        timezone=timezone,
     )

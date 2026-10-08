@@ -10,8 +10,9 @@ User=fragdash
 Group=fragdash
 WorkingDirectory=/opt/reddit-notifier
 Environment=PYTHONUNBUFFERED=1
-# Adjust the uv path if it lives elsewhere. Find it with: sudo -u fragdash which uv
-ExecStart=/home/fragdash/.local/bin/uv run --frozen reddit-notifier --config /opt/reddit-notifier/config.toml run
+# Run the program straight from the project's environment (made by `uv sync`).
+# Using `uv run` here would leave a ~20 MB uv process idling alongside it.
+ExecStart=/opt/reddit-notifier/.venv/bin/reddit-notifier --config /opt/reddit-notifier/config.toml run
 Restart=on-failure
 RestartSec=30
 

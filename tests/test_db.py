@@ -153,3 +153,21 @@ def test_config_feed_url_override_and_absolute_db_path(tmp_path):
     assert cfg.alert_after_minutes == 5
     assert cfg.server_ssh == "root@example.com"
     assert cfg.tunnel_port == 6000
+
+
+def test_localtime_uses_configured_timezone():
+    try:
+        db.set_display_timezone("America/Chicago")  # UTC-5 in October
+        assert db.localtime("2026-10-07T23:52:43+00:00") == "Oct 7, 6:52 PM"
+        db.set_display_timezone("UTC")
+        assert db.localtime("2026-10-07T23:52:43+00:00") == "Oct 7, 11:52 PM"
+    finally:
+        db.set_display_timezone(None)
+
+
+def test_config_rejects_unknown_timezone(tmp_path):
+    from reddit_notifier.config import ConfigError, load_config
+
+    (tmp_path / "config.toml").write_text('timezone = "Mars/Olympus"\n[ntfy]\ntopic = "t"\n')
+    with pytest.raises(ConfigError, match="Unknown timezone 'Mars/Olympus'"):
+        load_config(tmp_path / "config.toml")

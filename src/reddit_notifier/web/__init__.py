@@ -68,6 +68,7 @@ def create_app(cfg: Config) -> Flask:
     # name rather than Flask's default "session" (which Noted also uses).
     app.config["SESSION_COOKIE_NAME"] = "reddit_notifier_session"
     app.config["NOTIFIER"] = cfg
+    db.set_display_timezone(cfg.timezone)
     feed_cache = app.extensions["feed_cache"] = FeedCache()
 
     @app.before_request

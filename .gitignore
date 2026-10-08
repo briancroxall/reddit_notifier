@@ -7,3 +7,8 @@ __pycache__/
 # Local settings and data (never commit)
 config.toml
 data/
+
+# Editor swap/backup files (vim's can contain a copy of config.toml)
+*.swp
+*.swo
+*~

@@ -10,7 +10,9 @@ WorkingDirectory=/opt/reddit-notifier
 Environment=PYTHONUNBUFFERED=1
 # Listens on 127.0.0.1 only, so it's not reachable from the internet; the
 # DigitalOcean firewall needs no changes.
-ExecStart=/home/fragdash/.local/bin/uv run --frozen reddit-notifier --config /opt/reddit-notifier/config.toml web
+# Run the program straight from the project's environment (made by `uv sync`).
+# Using `uv run` here would leave a ~20 MB uv process idling alongside it.
+ExecStart=/opt/reddit-notifier/.venv/bin/reddit-notifier --config /opt/reddit-notifier/config.toml web
 Restart=on-failure
 RestartSec=30
 

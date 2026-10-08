@@ -112,6 +112,11 @@ chown fragdash:fragdash /opt/reddit-notifier/config.toml
 chmod 600 /opt/reddit-notifier/config.toml
 ```
 
+Servers often run on UTC, which would make the web UI show UTC times. If
+`timedatectl` on the server doesn't show your time zone, open
+`/opt/reddit-notifier/config.toml` and set `timezone` (above the `[ntfy]`
+line) to yours, e.g. `timezone = "America/Chicago"`.
+
 ## 4. Switch over: stop the Mac, move the database, start the server
 
 Do these in order.
@@ -155,9 +160,12 @@ Then watch the poller's log:
 journalctl -u reddit-notifier -f
 ```
 
-Within a minute you should see `Watching r/fragranceswap every 10 minutes`,
-then `Checked 100 posts: ...`. Press Ctrl-C to stop watching (the service
-keeps running).
+It shows the latest lines, including `Watching r/fragranceswap every 10
+minutes` and `Checked 100 posts: ...`, then waits for new ones. The poller
+only writes about one line per poll, so after that it can look idle for up to
+10 minutes; that's normal. Press Ctrl-C to stop watching (the service keeps
+running). To print recent lines and exit instead:
+`journalctl -u reddit-notifier -n 20 --no-pager`.
 
 Check memory again and compare it with step 2:
 
@@ -217,9 +225,9 @@ uv run reddit-notifier service start
 
 ## Troubleshooting
 
-- **`status=203/EXEC` in `systemctl status`:** systemd can't find uv. Run
-  `sudo -u fragdash which uv` and fix the path in both `deploy/*.service`
-  files.
+- **`status=203/EXEC` in `systemctl status`:** systemd can't find the
+  program. The project's environment is probably missing: run
+  `bash /opt/reddit-notifier/deploy/update.sh`, which runs `uv sync`.
 - **Service keeps restarting:** read the error with
   `journalctl -u reddit-notifier -n 50`.
 - **`tunnel` says the port is in use:** another tunnel is already open, or

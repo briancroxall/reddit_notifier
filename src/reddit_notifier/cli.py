@@ -19,7 +19,7 @@ MAX_WAIT_SECONDS = 30 * 60
 
 
 def say(message: str) -> None:
-    print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] {message}", flush=True)
+    print(f"[{db.local_now():%Y-%m-%d %H:%M:%S}] {message}", flush=True)
 
 
 # --- polling -----------------------------------------------------------------
@@ -404,5 +404,6 @@ def main(argv: list[str] | None = None) -> None:
         cfg = load_config(args.config)
     except ConfigError as e:
         sys.exit(str(e))
+    db.set_display_timezone(cfg.timezone)
     conn = db.connect(cfg.db_path)
     args.func(args, cfg, conn)
