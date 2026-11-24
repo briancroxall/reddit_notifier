@@ -1,5 +1,13 @@
 # reddit_notifier
 
+> **Status (November 2026): paused.** Reddit shut down its RSS feeds on
+> 13 November 2026, and this tool depends on them, so it can no longer read
+> new posts. Reddit's public API also closes in March 2027, after which
+> access requires a commercial agreement. The code is kept here for reference
+> and in case Reddit offers a usable route again. All feed access lives in
+> `feed.py`, so switching to a new source would only mean changing that one
+> file.
+
 Get a push notification on your phone when someone posts a listing on
 [r/fragranceswap](https://www.reddit.com/r/fragranceswap/) that mentions a
 fragrance on your watchlist.
@@ -37,7 +45,8 @@ every few minutes and alert you through [ntfy](https://ntfy.sh).
 The tool reads the subreddit's public RSS feed (`/r/<sub>/new/.rss`), which
 returns the newest 100 posts, roughly the last 12 hours on r/fragranceswap.
 It sends a descriptive User-Agent and polls no more often than every 2
-minutes (10 by default).
+minutes (10 by default). Reddit ended RSS support on 13 November 2026, so
+this no longer works; see the status note above.
 
 It does not use Reddit's official API: since late 2025 that requires
 pre-approval, and Reddit's anonymous `.json` endpoints were shut off in
@@ -239,8 +248,9 @@ send notifications.
   home computer.
 - **On a Mac, it pauses while the Mac sleeps.** It catches up on wake, as
   long as fewer than ~100 posts (about 12 hours) went by.
-- **Reddit could close the RSS feed**, as it did the `.json` endpoints. If
-  that happens, `feed.py` would need to move to the official API.
+- **Reddit closed the RSS feed** on 13 November 2026. Since then every
+  check fails with `HTTP 404`. The "having trouble" alert fired once, 80
+  minutes after the failures began.
 - **RSS doesn't include post flair**, so "sale only" relies on the `[WTS]`
   tag in the title, which r/fragranceswap uses consistently.
 
